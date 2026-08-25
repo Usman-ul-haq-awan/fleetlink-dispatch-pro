@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck } from "lucide-react";
+import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
 
@@ -10,6 +11,7 @@ export default function CarrierResearch() {
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState({ total: 0, done: 0, failed: 0, current: "" });
   const [errors, setErrors] = useState([]);
+  const [activeResearch, setActiveResearch] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -29,16 +31,38 @@ export default function CarrierResearch() {
   useEffect(() => { load(); }, [load]);
 
   const processOne = async (carrier) => {
+    setActiveResearch({
+      carrierId: carrier.id,
+      name: carrier.legal_name || carrier.usdot_number || "Unknown",
+      steps: [],
+      status: "running",
+      errors: [],
+    });
     try {
-      const res = await base44.functions.invoke("researchCarrier", { carrier_id: carrier.id, usdot: carrier.usdot_number });
-      return res.data;
+      const res = await base44.functions.invoke("researchCarrierBrowser", {
+        carrier_id: carrier.id,
+        usdot: carrier.usdot_number,
+        mc: carrier.mc_number,
+      });
+      const data = res.data;
+      setActiveResearch((prev) =>
+        prev ? {
+          ...prev,
+          steps: data.steps || [],
+          status: data.success ? "done" : "error",
+          errors: data.errors || (data.error ? [data.error] : []),
+        } : prev
+      );
+      return data;
     } catch (err) {
-      return { success: false, error: err.response?.data?.error || err.message };
+      const msg = err.response?.data?.error || err.message;
+      setActiveResearch((prev) => (prev ? { ...prev, status: "error", errors: [msg] } : prev));
+      return { success: false, error: msg };
     }
   };
 
   const processBatch = async () => {
-    const toProcess = carriers.filter(c => c.usdot_number && (c.lead_status === "Imported" || c.lead_status === "Queued" || c.lead_status === "Failed"));
+    const toProcess = carriers.filter(c => c.usdot_number && (c.lead_status === "Imported" || c.lead_status === "Queued" || c.lead_status === "Failed")).slice(0, 10);
     if (toProcess.length === 0) return;
 
     setProcessing(true);
@@ -83,7 +107,7 @@ export default function CarrierResearch() {
         <button onClick={processBatch} disabled={processing || carriers.length === 0}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
           {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {processing ? "Processing..." : "Process All"}
+          {processing ? "Researching..." : "Research Batch (10)"}
         </button>
       </div>
 
@@ -98,6 +122,8 @@ export default function CarrierResearch() {
           </div>
         </div>
       )}
+
+      {activeResearch && <ResearchStepsPanel research={activeResearch} />}
 
       {errors.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -169,17 +195,20 @@ export default function CarrierResearch() {
       </div>
 
       <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
-        <h3 className="font-medium text-slate-700 text-sm mb-2">Research Workflow</h3>
+        <h3 className="font-medium text-slate-700 text-sm mb-2">Browser Automation Workflow (Playwright)</h3>
         <ol className="text-xs text-slate-500 space-y-1 list-decimal list-inside">
-          <li>SAFER Company Snapshot lookup (public web page fetch + HTML parsing)</li>
-          <li>SMS/CSA Results page navigation (if link available on SAFER page)</li>
-          <li>Licensing & Insurance page navigation (if link available)</li>
-          <li>Safety qualification engine evaluation</li>
-          <li>Lead score calculation</li>
-          <li>Evidence records created for every extracted field with source URL and timestamp</li>
+          <li>Open SAFER Company Snapshot in a real Chromium browser</li>
+          <li>Extract carrier fields + discover carrier-specific links (SMS, Insurance, Inspections, Safety Rating)</li>
+          <li>Open SMS Overview → Complete SMS Profile → Carrier History → Registration Details</li>
+          <li>Return to snapshot → open Licensing & Insurance</li>
+          <li>Open Inspections/Crashes page</li>
+          <li>Open Safety Rating page</li>
+          <li>Validate USDOT identity on every page (stops on mismatch)</li>
+          <li>Safety qualification engine + lead score calculation</li>
+          <li>Evidence records created for every field with source URL + timestamp</li>
         </ol>
-        <p className="text-xs text-amber-600 mt-2">
-          Note: Some FMCSA pages (SMS/Insurance) may require JavaScript rendering. If data cannot be extracted via HTTP fetch, it will be marked as "Not Available" and the carrier can be manually reviewed.
+        <p className="text-xs text-blue-600 mt-2">
+          Requires the Playwright browser worker to be deployed (see browser-worker/README.md) and the WORKER_URL + WORKER_API_KEY secrets configured in app settings. Until then, research will return a "worker not configured" error.
         </p>
       </div>
     </div>

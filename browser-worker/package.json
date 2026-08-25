@@ -1,0 +1,19 @@
+{
+  "name": "fleetlink-browser-worker",
+  "version": "1.0.0",
+  "description": "Playwright browser automation worker that extracts SAFER/SMS carrier data for FleetLink Dispatch Pro",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scraper.js",
+    "test:klei": "node test.js 1673510"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "playwright": "^1.45.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
