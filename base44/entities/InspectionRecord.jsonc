@@ -1,0 +1,43 @@
+{
+  "name": "InspectionRecord",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "inspection_type": {
+      "type": "string"
+    },
+    "total_inspections": {
+      "type": "number"
+    },
+    "inspections_with_violations": {
+      "type": "number"
+    },
+    "inspections_without_violations": {
+      "type": "number"
+    },
+    "out_of_service_count": {
+      "type": "number"
+    },
+    "out_of_service_percent": {
+      "type": "string"
+    },
+    "violation_details": {
+      "type": "string"
+    },
+    "inspection_date": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "retrieval_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id"
+  ]
+}

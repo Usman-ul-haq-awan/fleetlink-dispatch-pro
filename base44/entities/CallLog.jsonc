@@ -1,0 +1,75 @@
+{
+  "name": "CallLog",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "phone_number": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "Outbound",
+        "Inbound"
+      ],
+      "default": "Outbound"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "No Answer",
+        "Voicemail",
+        "Interested",
+        "Very Interested",
+        "Callback Requested",
+        "Not Interested",
+        "Already Has Dispatcher",
+        "Wrong Number",
+        "Do Not Contact",
+        "Human Handoff",
+        "Converted",
+        "Pending",
+        "Failed"
+      ],
+      "default": "Pending"
+    },
+    "call_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_seconds": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "transcript": {
+      "type": "string"
+    },
+    "next_action": {
+      "type": "string"
+    },
+    "voice_provider_call_id": {
+      "type": "string"
+    },
+    "is_ai_call": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Queued",
+        "In Progress",
+        "Completed",
+        "Failed"
+      ],
+      "default": "Queued"
+    }
+  },
+  "required": [
+    "carrier_id"
+  ]
+}

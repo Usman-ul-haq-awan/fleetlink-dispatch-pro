@@ -1,0 +1,66 @@
+{
+  "name": "EmailCampaign",
+  "type": "object",
+  "properties": {
+    "campaign_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Draft",
+        "Active",
+        "Paused",
+        "Completed",
+        "Archived"
+      ],
+      "default": "Draft"
+    },
+    "template_subject": {
+      "type": "string"
+    },
+    "template_body": {
+      "type": "string",
+      "description": "Template with {{placeholders}}"
+    },
+    "target_lead_status": {
+      "type": "string",
+      "description": "Which lead statuses to target"
+    },
+    "daily_send_limit": {
+      "type": "number",
+      "default": 50
+    },
+    "total_queued": {
+      "type": "number",
+      "default": 0
+    },
+    "total_sent": {
+      "type": "number",
+      "default": 0
+    },
+    "total_replied": {
+      "type": "number",
+      "default": 0
+    },
+    "total_bounced": {
+      "type": "number",
+      "default": 0
+    },
+    "follow_up_delay_days": {
+      "type": "number",
+      "default": 3
+    },
+    "max_follow_ups": {
+      "type": "number",
+      "default": 2
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "campaign_name"
+  ]
+}

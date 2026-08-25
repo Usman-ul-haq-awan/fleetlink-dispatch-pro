@@ -1,0 +1,47 @@
+{
+  "name": "ResearchError",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "step": {
+      "type": "string",
+      "description": "Which research step failed"
+    },
+    "error_type": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "retry_count": {
+      "type": "number",
+      "default": 0
+    },
+    "recommended_action": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "New",
+        "Retrying",
+        "Resolved",
+        "Manual Review"
+      ],
+      "default": "New"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id",
+    "step"
+  ]
+}

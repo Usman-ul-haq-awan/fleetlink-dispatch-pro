@@ -1,0 +1,40 @@
+{
+  "name": "CrashRecord",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "total_crashes": {
+      "type": "number"
+    },
+    "fatal_crashes": {
+      "type": "number"
+    },
+    "injury_crashes": {
+      "type": "number"
+    },
+    "towaway_crashes": {
+      "type": "number"
+    },
+    "crash_date": {
+      "type": "string"
+    },
+    "crash_details": {
+      "type": "string"
+    },
+    "data_period": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "retrieval_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id"
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "name": "Equipment",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "equipment_type": {
+      "type": "string",
+      "enum": [
+        "Dry Van",
+        "Reefer",
+        "Flatbed",
+        "Step Deck",
+        "Conestoga",
+        "Power Only",
+        "Hotshot",
+        "Box Truck",
+        "Straight Truck",
+        "Tanker",
+        "Car Hauler",
+        "Dump",
+        "Specialized",
+        "Other",
+        "Unknown"
+      ]
+    },
+    "quantity": {
+      "type": "number"
+    },
+    "evidence": {
+      "type": "string",
+      "description": "What evidence supports this equipment type"
+    },
+    "evidence_url": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "High",
+        "Medium",
+        "Low",
+        "Unknown"
+      ],
+      "default": "Unknown"
+    },
+    "date_verified": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id",
+    "equipment_type"
+  ]
+}

@@ -1,0 +1,177 @@
+{
+  "name": "Carrier",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string",
+      "description": "Internal unique carrier identifier"
+    },
+    "legal_name": {
+      "type": "string"
+    },
+    "dba_name": {
+      "type": "string"
+    },
+    "usdot_number": {
+      "type": "string",
+      "description": "USDOT number"
+    },
+    "mc_number": {
+      "type": "string"
+    },
+    "mx_number": {
+      "type": "string"
+    },
+    "operating_status": {
+      "type": "string"
+    },
+    "carrier_type": {
+      "type": "string"
+    },
+    "entity_type": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "zip": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "fax": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "website": {
+      "type": "string"
+    },
+    "owner_name": {
+      "type": "string"
+    },
+    "contact_name": {
+      "type": "string"
+    },
+    "contact_title": {
+      "type": "string"
+    },
+    "power_units": {
+      "type": "number"
+    },
+    "drivers": {
+      "type": "number"
+    },
+    "cargo_types": {
+      "type": "string"
+    },
+    "carrier_segment": {
+      "type": "string"
+    },
+    "equipment_types": {
+      "type": "string",
+      "description": "Comma-separated equipment types from evidence"
+    },
+    "equipment_quantity": {
+      "type": "string"
+    },
+    "lead_status": {
+      "type": "string",
+      "enum": [
+        "Imported",
+        "Queued",
+        "Researching",
+        "SAFER Complete",
+        "SMS Complete",
+        "Registration Complete",
+        "Insurance Complete",
+        "Safety Complete",
+        "Equipment Complete",
+        "Contact Complete",
+        "Qualified",
+        "Needs Review",
+        "Failed",
+        "Ready for Outreach",
+        "Contacted",
+        "Interested",
+        "Human Handoff",
+        "Onboarding",
+        "Active Client",
+        "Do Not Contact"
+      ],
+      "default": "Imported"
+    },
+    "lead_score": {
+      "type": "number",
+      "default": 0
+    },
+    "lead_score_reasons": {
+      "type": "string"
+    },
+    "safety_qualification": {
+      "type": "string",
+      "enum": [
+        "Qualified",
+        "Review Required",
+        "High Risk",
+        "Insufficient Data",
+        "Not Assessed"
+      ],
+      "default": "Not Assessed"
+    },
+    "safety_reasons": {
+      "type": "string"
+    },
+    "safety_positive_indicators": {
+      "type": "string"
+    },
+    "safety_risk_flags": {
+      "type": "string"
+    },
+    "safety_rating": {
+      "type": "string"
+    },
+    "data_completeness": {
+      "type": "string",
+      "description": "Percentage or label of data completeness"
+    },
+    "research_status": {
+      "type": "string",
+      "description": "Current research step"
+    },
+    "safer_url": {
+      "type": "string"
+    },
+    "sms_url": {
+      "type": "string"
+    },
+    "last_researched_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "do_not_contact": {
+      "type": "boolean",
+      "default": false
+    },
+    "dnc_reason": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "carrier_id"
+  ]
+}

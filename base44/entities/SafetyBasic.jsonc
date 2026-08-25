@@ -1,0 +1,46 @@
+{
+  "name": "SafetyBasic",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "basic_category": {
+      "type": "string",
+      "description": "e.g. Unsafe Driving, Hours of Service, etc."
+    },
+    "measure_value": {
+      "type": "string"
+    },
+    "on_road_percentile": {
+      "type": "string"
+    },
+    "investigation_percentile": {
+      "type": "string"
+    },
+    "violation_count": {
+      "type": "number"
+    },
+    "deficiency_indicator": {
+      "type": "string",
+      "description": "e.g. Alert, Monitor, No Deficiency"
+    },
+    "data_period": {
+      "type": "string"
+    },
+    "data_date": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "retrieval_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id",
+    "basic_category"
+  ]
+}

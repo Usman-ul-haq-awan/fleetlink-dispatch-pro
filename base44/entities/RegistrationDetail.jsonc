@@ -1,0 +1,30 @@
+{
+  "name": "RegistrationDetail",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "field_label": {
+      "type": "string",
+      "description": "Original label from FMCSA registration page"
+    },
+    "field_value": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "retrieval_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id",
+    "field_label"
+  ]
+}

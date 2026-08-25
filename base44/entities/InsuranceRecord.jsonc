@@ -1,0 +1,44 @@
+{
+  "name": "InsuranceRecord",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "insurance_type": {
+      "type": "string",
+      "description": "e.g. Bodily Injury, Cargo, etc."
+    },
+    "insurance_company": {
+      "type": "string"
+    },
+    "policy_number": {
+      "type": "string"
+    },
+    "coverage_amount": {
+      "type": "string"
+    },
+    "effective_date": {
+      "type": "string"
+    },
+    "cancellation_date": {
+      "type": "string"
+    },
+    "filing_type": {
+      "type": "string"
+    },
+    "authority_status": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "retrieval_date": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id"
+  ]
+}

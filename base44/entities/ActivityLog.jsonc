@@ -1,0 +1,40 @@
+{
+  "name": "ActivityLog",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string",
+      "description": "e.g. Carrier imported, SAFER lookup started, etc."
+    },
+    "workflow": {
+      "type": "string",
+      "description": "Which workflow/automation triggered this"
+    },
+    "details": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Success",
+        "Info",
+        "Warning",
+        "Error"
+      ],
+      "default": "Info"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "action"
+  ]
+}

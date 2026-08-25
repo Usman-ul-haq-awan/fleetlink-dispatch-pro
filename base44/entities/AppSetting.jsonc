@@ -1,0 +1,28 @@
+{
+  "name": "AppSetting",
+  "type": "object",
+  "properties": {
+    "setting_key": {
+      "type": "string",
+      "description": "Unique key for the setting"
+    },
+    "setting_value": {
+      "type": "string"
+    },
+    "setting_category": {
+      "type": "string",
+      "description": "company, email, calling, lead_score, safety, batch"
+    },
+    "setting_type": {
+      "type": "string",
+      "description": "string, number, boolean, text"
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "setting_key",
+    "setting_value"
+  ]
+}

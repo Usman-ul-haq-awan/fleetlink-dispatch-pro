@@ -1,0 +1,67 @@
+{
+  "name": "EmailLog",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "to_email": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "Outbound",
+        "Inbound"
+      ],
+      "default": "Outbound"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Queued",
+        "Sent",
+        "Failed",
+        "Bounced",
+        "Replied",
+        "Opened"
+      ],
+      "default": "Queued"
+    },
+    "is_follow_up": {
+      "type": "boolean",
+      "default": false
+    },
+    "follow_up_number": {
+      "type": "number",
+      "default": 0
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "replied_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "message_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "carrier_id",
+    "to_email"
+  ]
+}

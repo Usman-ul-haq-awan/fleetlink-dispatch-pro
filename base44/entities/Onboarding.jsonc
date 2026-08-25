@@ -1,0 +1,80 @@
+{
+  "name": "Onboarding",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string"
+    },
+    "dispatch_agreement": {
+      "type": "boolean",
+      "default": false
+    },
+    "carrier_documents": {
+      "type": "boolean",
+      "default": false
+    },
+    "w9_received": {
+      "type": "boolean",
+      "default": false
+    },
+    "insurance_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "operating_authority_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "equipment_confirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "preferred_lanes": {
+      "type": "string"
+    },
+    "home_time": {
+      "type": "string"
+    },
+    "rate_preferences": {
+      "type": "string"
+    },
+    "factoring_info": {
+      "type": "string"
+    },
+    "broker_requirements": {
+      "type": "string"
+    },
+    "dispatch_start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "onboarding_status": {
+      "type": "string",
+      "enum": [
+        "New",
+        "Contacted",
+        "Documents Requested",
+        "Documents Received",
+        "Under Review",
+        "Ready for Dispatch",
+        "Active Client",
+        "Lost"
+      ],
+      "default": "New"
+    },
+    "checklist_notes": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "carrier_id"
+  ]
+}
