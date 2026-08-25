@@ -1,0 +1,313 @@
+import React, { useState, useRef } from "react";
+import { base44 } from "@/api/base44Client";
+import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  const parseLine = (line) => {
+    const result = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (char === "," && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseLine(lines[0]);
+  const rows = lines.slice(1).map(line => {
+    const values = parseLine(line);
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = values[i] || ""; });
+    return obj;
+  });
+  return { headers, rows };
+}
+
+const FIELD_OPTIONS = [
+  { value: "usdot_number", label: "USDOT Number" },
+  { value: "mc_number", label: "MC Number" },
+  { value: "legal_name", label: "Legal Name / Company Name" },
+  { value: "phone", label: "Phone" },
+  { value: "email", label: "Email" },
+  { value: "state", label: "State" },
+  { value: "equipment_types", label: "Equipment Type" },
+  { value: "city", label: "City" },
+  { value: "owner_name", label: "Owner Name" },
+  { value: "_skip", label: "— Skip this column —" },
+];
+
+function autoDetectColumn(header) {
+  const h = header.toLowerCase().replace(/[^a-z]/g, "");
+  if (h.includes("usdot") || h === "dot" || h.includes("dotnumber")) return "usdot_number";
+  if (h.includes("mc") && h.length <= 5) return "mc_number";
+  if (h.includes("name") || h.includes("company") || h.includes("carrier")) return "legal_name";
+  if (h.includes("phone") || h.includes("tel")) return "phone";
+  if (h.includes("email") || h.includes("mail")) return "email";
+  if (h.includes("state")) return "state";
+  if (h.includes("equipment") || h.includes("trailer") || h.includes("truck")) return "equipment_types";
+  if (h.includes("city")) return "city";
+  if (h.includes("owner")) return "owner_name";
+  return "_skip";
+}
+
+export default function ImportExport() {
+  const [tab, setTab] = useState("import");
+  const [parsedData, setParsedData] = useState(null);
+  const [columnMap, setColumnMap] = useState({});
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [fileName, setFileName] = useState("");
+  const fileRef = useRef(null);
+
+  const handleFile = async (file) => {
+    setFileName(file.name);
+    const text = await file.text();
+    const parsed = parseCSV(text);
+    setParsedData(parsed);
+
+    const autoMap = {};
+    parsed.headers.forEach(h => { autoMap[h] = autoDetectColumn(h); });
+    setColumnMap(autoMap);
+    setImportResult(null);
+  };
+
+  const handleImport = async () => {
+    if (!parsedData) return;
+    setImporting(true);
+    setImportResult(null);
+
+    try {
+      const carriers = parsedData.rows.map(row => {
+        const carrier = { carrier_id: crypto.randomUUID(), lead_status: "Imported", safety_qualification: "Not Assessed" };
+        Object.entries(columnMap).forEach(([csvCol, field]) => {
+          if (field && field !== "_skip" && row[csvCol]) {
+            carrier[field] = row[csvCol];
+          }
+        });
+        return carrier;
+      });
+
+      const existingCarriers = await base44.entities.Carrier.list("-updated_date", 500);
+      const existingUsdots = new Set(existingCarriers.map(c => c.usdot_number).filter(Boolean));
+      const existingMcs = new Set(existingCarriers.map(c => c.mc_number).filter(Boolean));
+
+      const newCarriers = [];
+      const duplicates = [];
+      const missingUsdot = [];
+      const missingMc = [];
+
+      for (const c of carriers) {
+        if (c.usdot_number && existingUsdots.has(c.usdot_number)) { duplicates.push(c); continue; }
+        if (c.mc_number && existingMcs.has(c.mc_number)) { duplicates.push(c); continue; }
+        if (!c.usdot_number) missingUsdot.push(c);
+        if (!c.mc_number) missingMc.push(c);
+        newCarriers.push(c);
+      }
+
+      const BATCH = 50;
+      for (let i = 0; i < newCarriers.length; i += BATCH) {
+        await base44.entities.Carrier.bulkCreate(newCarriers.slice(i, i + BATCH));
+      }
+
+      await base44.entities.ImportBatch.create({
+        batch_name: fileName || "Import",
+        file_name: fileName,
+        total_records: carriers.length,
+        duplicates_found: duplicates.length,
+        missing_usdot: missingUsdot.length,
+        missing_mc: missingMc.length,
+        invalid_records: 0,
+        imported_count: newCarriers.length,
+        status: "Completed",
+        created_at: new Date().toISOString(),
+      });
+
+      await base44.entities.ActivityLog.create({
+        action: "Carrier import completed",
+        workflow: "ImportExport",
+        details: `Imported ${newCarriers.length} carriers, ${duplicates.length} duplicates, ${missingUsdot.length} missing USDOT`,
+        status: "Success",
+        timestamp: new Date().toISOString(),
+      });
+
+      setImportResult({
+        total: carriers.length,
+        imported: newCarriers.length,
+        duplicates: duplicates.length,
+        missingUsdot: missingUsdot.length,
+        missingMc: missingMc.length,
+      });
+      setParsedData(null);
+    } catch (err) {
+      setImportResult({ error: err.message });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await base44.functions.invoke("exportCarriers", {});
+      const csv = res.data.csv;
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.filename || "carriers_export.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Export failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-bold text-slate-900 mb-6">Import / Export</h1>
+
+      <div className="flex gap-2 mb-6">
+        <button onClick={() => setTab("import")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "import" ? "bg-blue-600 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
+          Import Carriers
+        </button>
+        <button onClick={() => setTab("export")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "export" ? "bg-blue-600 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
+          Export Carriers
+        </button>
+      </div>
+
+      {tab === "import" && (
+        <div className="space-y-4">
+          {!parsedData && !importResult && (
+            <div className="bg-white rounded-lg border-2 border-dashed border-slate-300 p-12 text-center">
+              <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-600 mb-2">Upload a CSV file with carrier data</p>
+              <p className="text-xs text-slate-400 mb-4">Supports columns: USDOT, MC, Company Name, Phone, Email, State, Equipment</p>
+              <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <button onClick={() => fileRef.current?.click()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                Select CSV File
+              </button>
+            </div>
+          )}
+
+          {parsedData && (
+            <div className="bg-white rounded-lg border border-slate-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-semibold text-slate-900">{fileName}</h2>
+                  <p className="text-sm text-slate-500">{parsedData.rows.length} records found</p>
+                </div>
+                <button onClick={() => setParsedData(null)} className="text-sm text-slate-500 hover:text-slate-700">Cancel</button>
+              </div>
+
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-slate-700 mb-2">Column Mapping</h3>
+                <div className="space-y-2">
+                  {parsedData.headers.map(header => (
+                    <div key={header} className="flex items-center gap-3">
+                      <span className="text-sm text-slate-600 w-40 truncate">{header}</span>
+                      <span className="text-slate-300">→</span>
+                      <select value={columnMap[header] || "_skip"} onChange={e => setColumnMap({...columnMap, [header]: e.target.value})}
+                        className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg">
+                        {FIELD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                      <span className="text-xs text-slate-400">Sample: {parsedData.rows[0]?.[header] || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto mb-4">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr className="border-b border-slate-200">
+                      {parsedData.headers.slice(0, 6).map(h => <th key={h} className="text-left px-3 py-2 font-medium text-slate-600">{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsedData.rows.slice(0, 5).map((row, i) => (
+                      <tr key={i} className="border-b border-slate-100">
+                        {parsedData.headers.slice(0, 6).map(h => <td key={h} className="px-3 py-2 text-slate-600 max-w-xs truncate">{row[h]}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button onClick={handleImport} disabled={importing}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {importing ? "Importing..." : `Import ${parsedData.rows.length} Carriers`}
+              </button>
+            </div>
+          )}
+
+          {importResult && (
+            <div className="bg-white rounded-lg border border-slate-200 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <h2 className="font-semibold text-slate-900">Import Complete</h2>
+              </div>
+              {importResult.error ? (
+                <p className="text-red-600 text-sm">{importResult.error}</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-slate-900">{importResult.total}</p>
+                    <p className="text-xs text-slate-500">Total Records</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-green-700">{importResult.imported}</p>
+                    <p className="text-xs text-slate-500">Imported</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-amber-700">{importResult.duplicates}</p>
+                    <p className="text-xs text-slate-500">Duplicates</p>
+                  </div>
+                  <div className="bg-red-50 rounded-lg p-3">
+                    <p className="text-2xl font-bold text-red-700">{importResult.missingUsdot}</p>
+                    <p className="text-xs text-slate-500">Missing USDOT</p>
+                  </div>
+                </div>
+              )}
+              <button onClick={() => setImportResult(null)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">
+                Import Another File
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "export" && (
+        <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
+          <Download className="w-12 h-12 text-blue-300 mx-auto mb-3" />
+          <h2 className="font-semibold text-slate-900 mb-2">Export Carrier Database</h2>
+          <p className="text-sm text-slate-500 mb-4">Download all carrier data as a CSV file with separate columns for every field.</p>
+          <p className="text-xs text-slate-400 mb-4">Includes: Carrier Name, DBA, USDOT, MC, MX, Status, Address, Phone, Fax, Email, Owner, Contact, Power Units, Drivers, Cargo, Equipment, Safety Qualification, Lead Score, Source URLs, and more.</p>
+          <button onClick={handleExport} disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 mx-auto">
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {exporting ? "Exporting..." : "Export to CSV"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
