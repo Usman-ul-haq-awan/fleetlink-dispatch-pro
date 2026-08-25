@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
@@ -12,6 +12,8 @@ export default function CarrierResearch() {
   const [progress, setProgress] = useState({ total: 0, done: 0, failed: 0, current: "" });
   const [errors, setErrors] = useState([]);
   const [activeResearch, setActiveResearch] = useState(null);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const stopRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +99,49 @@ export default function CarrierResearch() {
     load();
   };
 
+  const startAutoResearch = async () => {
+    stopRef.current = false;
+    setAutoRunning(true);
+    setProcessing(true);
+    try {
+      while (!stopRef.current) {
+        const all = await base44.entities.Carrier.list("-updated_date", 500);
+        const queued = all.filter(c =>
+          c.usdot_number && ["Imported", "Queued", "Failed"].includes(c.lead_status)
+        );
+        if (queued.length === 0) break;
+
+        const toProcess = queued.slice(0, 10);
+        setProgress({ total: toProcess.length, done: 0, failed: 0, current: `Auto-researching ${toProcess.length} carriers · ${queued.length} in queue` });
+
+        const BATCH_SIZE = 3;
+        for (let i = 0; i < toProcess.length; i += BATCH_SIZE) {
+          if (stopRef.current) break;
+          const batch = toProcess.slice(i, i + BATCH_SIZE);
+          setProgress(p => ({ ...p, current: `Processing ${i + 1}-${Math.min(i + BATCH_SIZE, toProcess.length)} of ${toProcess.length} · ${queued.length} in queue` }));
+          const results = await Promise.all(batch.map(c => processOne(c)));
+          setProgress(p => ({
+            ...p,
+            done: p.done + results.filter(r => r.success).length,
+            failed: p.failed + results.filter(r => !r.success).length,
+          }));
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        await load();
+      }
+    } finally {
+      setAutoRunning(false);
+      setProcessing(false);
+      setProgress(p => ({ ...p, current: stopRef.current ? "Stopped" : "Queue complete" }));
+      stopRef.current = false;
+    }
+  };
+
+  const stopAutoResearch = () => {
+    stopRef.current = true;
+    setProgress(p => ({ ...p, current: "Stopping after current batch..." }));
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -104,11 +149,26 @@ export default function CarrierResearch() {
           <h1 className="text-2xl font-bold text-slate-900">Carrier Research Queue</h1>
           <p className="text-slate-500 text-sm mt-1">{carriers.length} carriers in queue</p>
         </div>
-        <button onClick={processBatch} disabled={processing || carriers.length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
-          {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {processing ? "Researching..." : "Research Batch (10)"}
-        </button>
+        <div className="flex items-center gap-2">
+          {!autoRunning ? (
+            <button onClick={startAutoResearch} disabled={processing || carriers.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+              <Play className="w-4 h-4" />
+              Start Auto-Research
+            </button>
+          ) : (
+            <button onClick={stopAutoResearch}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
+              <AlertCircle className="w-4 h-4" />
+              Stop Scraping
+            </button>
+          )}
+          <button onClick={processBatch} disabled={processing || carriers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+            {processing && !autoRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Research Batch (10)
+          </button>
+        </div>
       </div>
 
       {processing && (
