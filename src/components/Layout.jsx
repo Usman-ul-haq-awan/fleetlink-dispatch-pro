@@ -23,9 +23,13 @@ const navItems = [
 export default function Layout() {
   const location = useLocation();
   const [user, setUser] = React.useState(null);
+  const [outreachEnabled, setOutreachEnabled] = React.useState(false);
 
   React.useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
+    base44.entities.AppSetting.filter({ setting_key: "outreach_enabled" })
+      .then(res => { if (res.length > 0) setOutreachEnabled(res[0].setting_value === "true"); })
+      .catch(() => {});
   }, []);
 
   const handleLogout = async () => {
@@ -47,7 +51,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3">
-          {navItems.map(item => {
+          {navItems.filter(item => outreachEnabled || (item.path !== "/campaigns" && item.path !== "/calling")).map(item => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path ||
               (item.path !== "/" && location.pathname.startsWith(item.path));

@@ -62,6 +62,8 @@ export default function Settings() {
   const [settings, setSettings] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [outreachEnabled, setOutreachEnabled] = useState(false);
+  const [togglingOutreach, setTogglingOutreach] = useState(false);
 
   useEffect(() => { loadSettings(); }, []);
 
@@ -71,8 +73,35 @@ export default function Settings() {
       const map = {};
       all.forEach(s => { map[s.setting_key] = s.setting_value; });
       setSettings(map);
+      const outreach = all.find(s => s.setting_key === "outreach_enabled");
+      setOutreachEnabled(outreach ? outreach.setting_value === "true" : false);
     } catch (err) {
       console.error("Settings load error:", err);
+    }
+  };
+
+  const toggleOutreach = async () => {
+    setTogglingOutreach(true);
+    try {
+      const newValue = !outreachEnabled;
+      const all = await base44.entities.AppSetting.list("-setting_key", 100);
+      const existing = all.find(s => s.setting_key === "outreach_enabled");
+      if (existing) {
+        await base44.entities.AppSetting.update(existing.id, { setting_value: String(newValue) });
+      } else {
+        await base44.entities.AppSetting.create({
+          setting_key: "outreach_enabled",
+          setting_value: String(newValue),
+          setting_category: "feature",
+          setting_type: "boolean",
+          description: "Enable Email Campaigns and Calling Queue",
+        });
+      }
+      setOutreachEnabled(newValue);
+    } catch (err) {
+      alert("Toggle failed: " + err.message);
+    } finally {
+      setTogglingOutreach(false);
     }
   };
 
@@ -143,6 +172,26 @@ export default function Settings() {
           {saving ? "Saving..." : saved ? "Saved!" : "Save Settings"}
           <Save className="w-4 h-4" />
         </button>
+      </div>
+
+      <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">Outreach Features (Email & Calling)</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              {outreachEnabled
+                ? "Email Campaigns and Calling Queue are enabled in the sidebar."
+                : "Currently held. Focus on scraping carrier data first — flip this on when you're ready to reach out."}
+            </p>
+          </div>
+          <button
+            onClick={toggleOutreach}
+            disabled={togglingOutreach}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${outreachEnabled ? "bg-blue-600" : "bg-slate-300"}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${outreachEnabled ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        </div>
       </div>
 
       {SETTING_GROUPS.map(group => (
