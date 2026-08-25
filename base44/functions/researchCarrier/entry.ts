@@ -1,442 +1,457 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import {
-  getCarrierByDot,
-  getCarrierByName,
-  getCarrierByDocket,
-  getBasics,
-  getCargoCarried,
-  getOos,
-  getDocketNumbers,
-  getAuthority,
-  getOperationClassification,
-  extractCarrier,
-  extractList,
-  hasApiKey,
-  SAFER_URL,
-  SMS_URL,
-} from '../../shared/fmcsa.ts';
-import { qualifySafety, calculateLeadScore, calculateDataCompleteness } from '../../shared/scoring.ts';
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { parseSaferSnapshot, parseSmsPage, stripHtml, extractLinks } from "../../shared/saferParser.ts";
+import { qualifySafety } from "../../shared/safetyEngine.ts";
+import { scoreLead } from "../../shared/leadScoreEngine.ts";
+
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.5",
+};
+
+async function fetchPage(url: string): Promise<{ html: string; ok: boolean; status: number; finalUrl: string }> {
+  try {
+    const response = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      redirect: "follow",
+    });
+    const html = await response.text();
+    return { html, ok: response.ok, status: response.status, finalUrl: response.url || url };
+  } catch (error) {
+    return { html: "", ok: false, status: 0, finalUrl: url };
+  }
+}
+
+function buildSaferUrl(usdot?: string, mc?: string): string {
+  const param = usdot ? "USDOT" : "MC_MX";
+  const value = usdot || (mc || "").replace(/^MC-?/i, "");
+  return `https://safer.fmcsa.dot.gov/query.asp?query_type=queryCarrierSnapshot&query_param=${param}&query_string=${encodeURIComponent(value)}`;
+}
 
 export default async function(req: Request): Promise<Response> {
-  const base44 = createClientFromRequest(req);
-
   try {
+    const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { carrier_id, usdot, mc, name } = body;
+    const { carrier_id, usdot, mc, step } = body;
 
-    if (!carrier_id && !usdot && !mc && !name) {
-      return Response.json({ error: 'Provide carrier_id, usdot, mc, or name' }, { status: 400 });
+    // Find or create carrier
+    let carrier;
+    if (carrier_id) {
+      carrier = await base44.entities.Carrier.get(carrier_id);
+    } else if (usdot) {
+      const existing = await base44.entities.Carrier.filter({ usdot_number: usdot });
+      if (existing.length > 0) {
+        carrier = existing[0];
+      } else {
+        carrier = await base44.entities.Carrier.create({
+          carrier_id: crypto.randomUUID(),
+          usdot_number: usdot,
+          lead_status: "Imported",
+          safety_qualification: "Not Assessed",
+        });
+      }
+    } else if (mc) {
+      const cleanMc = mc.replace(/^MC-?/i, "");
+      const existing = await base44.entities.Carrier.filter({ mc_number: cleanMc });
+      if (existing.length > 0) {
+        carrier = existing[0];
+      } else {
+        carrier = await base44.entities.Carrier.create({
+          carrier_id: crypto.randomUUID(),
+          mc_number: cleanMc,
+          lead_status: "Imported",
+          safety_qualification: "Not Assessed",
+        });
+      }
+    } else {
+      return Response.json({ error: "carrier_id, usdot, or mc is required" }, { status: 400 });
     }
 
-    if (!hasApiKey()) {
-      return Response.json({
-        error: 'FMCSA_API_KEY not configured',
-        message: 'Request a free FMCSA API webkey at https://mobile.fmcsa.dot.gov/QCDevsite/ and add it in Settings → Environment Variables as FMCSA_API_KEY.',
-      }, { status: 503 });
-    }
-
-    const db = base44.asServiceRole;
+    const carrierId = carrier.id;
+    const stepsCompleted: string[] = [];
+    const stepsFailed: string[] = [];
+    const errors: string[] = [];
     const now = new Date().toISOString();
 
-    let carrier: any = null;
-    if (carrier_id) {
-      const existing = await db.entities.Carrier.filter({ carrier_id });
-      carrier = existing[0];
-    } else if (usdot) {
-      const existing = await db.entities.Carrier.filter({ usdot_number: usdot });
-      carrier = existing[0];
-    }
-
-    if (!carrier && !carrier_id) {
-      const newId = 'CAR-' + Date.now();
-      carrier = await db.entities.Carrier.create({
-        carrier_id: newId,
-        legal_name: name || '',
-        usdot_number: usdot || '',
-        mc_number: mc || '',
-        lead_status: 'Queued',
-        research_status: 'Starting',
-        safety_qualification: 'Not Assessed',
-        lead_score: 0,
-        do_not_contact: false,
-      });
-    }
-
-    if (!carrier) {
-      return Response.json({ error: 'Carrier not found' }, { status: 404 });
-    }
-
-    const cid = carrier.carrier_id;
-    const dotNum = carrier.usdot_number || usdot;
-    const mcNum = carrier.mc_number || mc;
-    const nameLookup = carrier.legal_name || name;
-
-    const results: any = { steps: [], carrier_id: cid };
-    let dotToUse = dotNum;
-
-    // Step 0: If no USDOT, try MC docket lookup
-    if (!dotToUse && mcNum) {
-      try {
-        await db.entities.ActivityLog.create({
-          carrier_id: cid, action: 'Docket/MC lookup started', workflow: 'researchCarrier',
-          status: 'Info', timestamp: now,
-        });
-        const docketResp = await getCarrierByDocket(mcNum);
-        const found = extractCarrier(docketResp);
-        if (found && found.dotNumber) {
-          dotToUse = found.dotNumber;
-          await db.entities.Carrier.update(carrier.id, { usdot_number: dotToUse });
-          results.steps.push({ step: 'docket_lookup', status: 'success', usdot: dotToUse });
-        }
-      } catch (e: any) {
-        await db.entities.ResearchError.create({
-          carrier_id: cid, step: 'docket_lookup', error_type: 'API Error',
-          error_message: e.message, retry_count: 0, recommended_action: 'Verify MC number',
-          status: 'New', timestamp: now,
-        });
-        results.steps.push({ step: 'docket_lookup', status: 'failed', error: e.message });
-      }
-    }
-
-    // Step 0b: If still no USDOT, try name lookup
-    if (!dotToUse && nameLookup) {
-      try {
-        await db.entities.ActivityLog.create({
-          carrier_id: cid, action: 'Name lookup started', workflow: 'researchCarrier',
-          status: 'Info', timestamp: now,
-        });
-        const nameResp = await getCarrierByName(nameLookup);
-        const found = extractCarrier(nameResp);
-        if (found && found.dotNumber) {
-          dotToUse = found.dotNumber;
-          await db.entities.Carrier.update(carrier.id, { usdot_number: dotToUse });
-          results.steps.push({ step: 'name_lookup', status: 'success', usdot: dotToUse });
-        }
-      } catch (e: any) {
-        await db.entities.ResearchError.create({
-          carrier_id: cid, step: 'name_lookup', error_type: 'API Error',
-          error_message: e.message, retry_count: 0, recommended_action: 'Verify carrier name or provide USDOT',
-          status: 'New', timestamp: now,
-        });
-        results.steps.push({ step: 'name_lookup', status: 'failed', error: e.message });
-      }
-    }
-
-    if (!dotToUse) {
-      await db.entities.Carrier.update(carrier.id, {
-        research_status: 'Failed - No USDOT found',
-        lead_status: 'Failed',
-      });
-      return Response.json({ error: 'Could not determine USDOT number for this carrier', results }, { status: 400 });
-    }
-
-    // Step 1: SAFER Company Snapshot
-    await db.entities.Carrier.update(carrier.id, { research_status: 'SAFER lookup', lead_status: 'Researching' });
-    await db.entities.ActivityLog.create({
-      carrier_id: cid, action: 'SAFER lookup started', workflow: 'researchCarrier',
-      status: 'Info', timestamp: now,
+    // Update research status
+    await base44.entities.Carrier.update(carrierId, { research_status: "Researching", lead_status: "Researching" });
+    await base44.entities.ActivityLog.create({
+      carrier_id: carrierId,
+      action: "SAFER lookup started",
+      workflow: "researchCarrier",
+      status: "Info",
+      timestamp: now,
     });
 
-    let carrierData: any = null;
-    try {
-      const saferResp = await getCarrierByDot(dotToUse);
-      carrierData = extractCarrier(saferResp);
-      const saferUrl = SAFER_URL(dotToUse);
+    // STEP 1: Fetch SAFER Company Snapshot
+    const saferUrl = buildSaferUrl(usdot || carrier.usdot_number, mc || carrier.mc_number);
+    const saferResult = await fetchPage(saferUrl);
 
-      const updates: any = {
-        legal_name: (carrierData && carrierData.legalName) || carrier.legal_name || 'Unknown',
-        dba_name: (carrierData && carrierData.dbaName) || '',
-        usdot_number: (carrierData && carrierData.dotNumber) || dotToUse,
-        mc_number: (carrierData && carrierData.mcNumber) || carrier.mc_number || '',
-        operating_status: carrierData && carrierData.allowToOperate === 'Y' ? 'Authorized' : 'Not Authorized',
-        address: (carrierData && carrierData.phyStreet) || '',
-        city: (carrierData && carrierData.phyCity) || '',
-        state: (carrierData && carrierData.phyState) || '',
-        zip: (carrierData && carrierData.phyZip) || '',
-        country: (carrierData && carrierData.phyCountry) || 'US',
-        phone: (carrierData && carrierData.telephone) || '',
-        power_units: carrierData && carrierData.powerUnits ? parseInt(carrierData.powerUnits) : carrier.power_units,
-        drivers: carrierData && carrierData.driver ? parseInt(carrierData.driver) : carrier.drivers,
-        safer_url: saferUrl,
-        last_researched_at: now,
-        research_status: 'SAFER Complete',
-      };
-
-      await db.entities.Carrier.update(carrier.id, updates);
-
-      const evidenceFields = [
-        { field: 'legal_name', value: updates.legal_name, confidence: 'High' },
-        { field: 'dba_name', value: updates.dba_name, confidence: 'High' },
-        { field: 'usdot_number', value: updates.usdot_number, confidence: 'High' },
-        { field: 'mc_number', value: updates.mc_number, confidence: 'High' },
-        { field: 'operating_status', value: updates.operating_status, confidence: 'High' },
-        { field: 'address', value: updates.address, confidence: 'High' },
-        { field: 'city', value: updates.city, confidence: 'High' },
-        { field: 'state', value: updates.state, confidence: 'High' },
-        { field: 'zip', value: updates.zip, confidence: 'High' },
-        { field: 'phone', value: updates.phone, confidence: 'High' },
-        { field: 'power_units', value: updates.power_units ? String(updates.power_units) : '', confidence: 'High' },
-        { field: 'drivers', value: updates.drivers ? String(updates.drivers) : '', confidence: 'High' },
-      ];
-
-      for (const ef of evidenceFields) {
-        if (ef.value && ef.value !== 'Unknown' && ef.value !== '') {
-          await db.entities.Evidence.create({
-            carrier_id: cid,
-            field_name: ef.field,
-            field_value: ef.value,
-            source_name: 'FMCSA SAFER',
-            source_url: saferUrl,
-            source_page: 'Company Snapshot',
-            retrieval_date: now,
-            confidence: ef.confidence,
-            notes: '',
-          });
-        }
-      }
-
-      await db.entities.ActivityLog.create({
-        carrier_id: cid, action: 'SAFER lookup completed', workflow: 'researchCarrier',
-        details: 'Extracted ' + evidenceFields.length + ' fields', status: 'Success', timestamp: now,
+    if (!saferResult.ok || saferResult.html.length < 500) {
+      stepsFailed.push("safer");
+      errors.push(`SAFER page fetch failed (status ${saferResult.status})`);
+      await base44.entities.ResearchError.create({
+        carrier_id: carrierId,
+        step: "SAFER Snapshot",
+        error_type: "Fetch Error",
+        error_message: `SAFER page fetch failed with status ${saferResult.status}. URL: ${saferUrl}`,
+        source_url: saferUrl,
+        retry_count: 0,
+        recommended_action: "Check if USDOT/MC number is valid. Retry may succeed if FMCSA server was temporarily unavailable.",
+        status: "Manual Review",
+        timestamp: now,
       });
-      results.steps.push({ step: 'safer', status: 'success', fields: evidenceFields.length });
-    } catch (e: any) {
-      await db.entities.ResearchError.create({
-        carrier_id: cid, step: 'safer_lookup', error_type: 'API Error',
-        error_message: e.message, source_url: SAFER_URL(dotToUse),
-        retry_count: 0, recommended_action: 'Check FMCSA API key and USDOT number',
-        status: 'New', timestamp: now,
+      await base44.entities.Carrier.update(carrierId, { research_status: "Failed", lead_status: "Failed" });
+      await base44.entities.ActivityLog.create({
+        carrier_id: carrierId,
+        action: "SAFER lookup failed",
+        workflow: "researchCarrier",
+        details: `Status ${saferResult.status}`,
+        status: "Error",
+        timestamp: now,
       });
-      await db.entities.ActivityLog.create({
-        carrier_id: cid, action: 'SAFER lookup failed', workflow: 'researchCarrier',
-        details: e.message, status: 'Error', timestamp: now,
-      });
-      results.steps.push({ step: 'safer', status: 'failed', error: e.message });
+      return Response.json({ success: false, carrier_id: carrierId, errors, steps_completed: stepsCompleted, steps_failed: stepsFailed });
     }
 
-    // Step 2: BASICs / SMS
-    let basicsData: any[] = [];
-    try {
-      await db.entities.ActivityLog.create({
-        carrier_id: cid, action: 'SMS/BASIC retrieval started', workflow: 'researchCarrier',
-        status: 'Info', timestamp: now,
-      });
-      const basicsResp = await getBasics(dotToUse);
-      basicsData = extractList(basicsResp);
-      const smsUrl = SMS_URL(dotToUse);
+    // Parse SAFER data
+    const saferData = parseSaferSnapshot(saferResult.html, saferResult.finalUrl);
 
-      for (const basic of basicsData) {
-        await db.entities.SafetyBasic.create({
-          carrier_id: cid,
-          basic_category: basic.basicDesc || basic.basicShortDesc || 'Unknown',
-          measure_value: basic.measureValue ? String(basic.measureValue) : '',
-          on_road_percentile: basic.percentile ? String(basic.percentile) : '',
-          violation_count: basic.totalViolation || 0,
-          deficiency_indicator: basic.rdDeficient === 'Y' ? 'Alert' : 'No Deficiency',
-          data_period: '24 months',
-          data_date: basic.snapShotDate || '',
-          source_url: smsUrl,
-          retrieval_date: now,
-        });
-      }
-
-      await db.entities.Carrier.update(carrier.id, { sms_url: smsUrl, research_status: 'SMS Complete' });
-      await db.entities.ActivityLog.create({
-        carrier_id: cid, action: 'SMS retrieved', workflow: 'researchCarrier',
-        details: basicsData.length + ' BASIC records', status: 'Success', timestamp: now,
+    // Check if we got real carrier data
+    if (!saferData.legalName && !saferData.usdotNumber) {
+      stepsFailed.push("safer");
+      errors.push("SAFER page did not contain carrier data (carrier may not exist)");
+      await base44.entities.ResearchError.create({
+        carrier_id: carrierId,
+        step: "SAFER Snapshot",
+        error_type: "No Data",
+        error_message: "SAFER page did not contain carrier identification data. The carrier may not exist or the page structure may have changed.",
+        source_url: saferUrl,
+        retry_count: 0,
+        recommended_action: "Verify the USDOT/MC number is correct.",
+        status: "Manual Review",
+        timestamp: now,
       });
-      results.steps.push({ step: 'basics', status: 'success', count: basicsData.length });
-    } catch (e: any) {
-      await db.entities.ResearchError.create({
-        carrier_id: cid, step: 'basics', error_type: 'API Error',
-        error_message: e.message, retry_count: 0,
-        recommended_action: 'Carrier may not have SMS data',
-        status: 'New', timestamp: now,
-      });
-      results.steps.push({ step: 'basics', status: 'failed', error: e.message });
+      return Response.json({ success: false, carrier_id: carrierId, errors, steps_completed: stepsCompleted, steps_failed: stepsFailed });
     }
 
-    // Step 3: Cargo carried
-    try {
-      const cargoResp = await getCargoCarried(dotToUse);
-      const cargoList = extractList(cargoResp);
-      const cargoTypes = cargoList.map((c: any) => c.cargoDescription || c.description || c.name).filter(Boolean).join(', ');
-      if (cargoTypes) {
-        await db.entities.Carrier.update(carrier.id, { cargo_types: cargoTypes });
-        await db.entities.Evidence.create({
-          carrier_id: cid, field_name: 'cargo_types', field_value: cargoTypes,
-          source_name: 'FMCSA SAFER', source_url: SAFER_URL(dotToUse),
-          source_page: 'Cargo Carried', retrieval_date: now, confidence: 'High',
-        });
-      }
-      results.steps.push({ step: 'cargo', status: 'success', cargo: cargoTypes });
-    } catch (e: any) {
-      results.steps.push({ step: 'cargo', status: 'failed', error: e.message });
+    // Update carrier with SAFER data - always use new research values (overwrites old data)
+    const carrierUpdate: any = {
+      legal_name: saferData.legalName || carrier.legal_name,
+      dba_name: saferData.dbaName,
+      usdot_number: saferData.usdotNumber || usdot || carrier.usdot_number,
+      mc_number: saferData.mcNumber,
+      mx_number: saferData.mxNumber,
+      operating_status: saferData.operatingStatus,
+      carrier_type: saferData.carrierType,
+      entity_type: saferData.entityType,
+      address: saferData.address,
+      city: saferData.city,
+      state: saferData.state,
+      zip: saferData.zip,
+      country: "US",
+      phone: saferData.phone,
+      fax: saferData.fax,
+      power_units: saferData.powerUnits,
+      drivers: saferData.drivers,
+      cargo_types: saferData.cargoTypes,
+      carrier_segment: saferData.carrierOperation,
+      safety_rating: saferData.safetyRating,
+      safer_url: saferResult.finalUrl,
+      last_researched_at: now,
+      research_status: "SAFER Complete",
+      lead_status: "SAFER Complete",
+    };
+
+    await base44.entities.Carrier.update(carrierId, carrierUpdate);
+    stepsCompleted.push("safer");
+
+    // Create evidence records for each extracted field
+    const evidenceFields = [
+      { name: "legal_name", value: saferData.legalName, confidence: "High" },
+      { name: "usdot_number", value: saferData.usdotNumber, confidence: "High" },
+      { name: "mc_number", value: saferData.mcNumber, confidence: "High" },
+      { name: "dba_name", value: saferData.dbaName, confidence: "High" },
+      { name: "operating_status", value: saferData.operatingStatus, confidence: "High" },
+      { name: "address", value: saferData.address, confidence: "High" },
+      { name: "phone", value: saferData.phone, confidence: "High" },
+      { name: "fax", value: saferData.fax, confidence: "High" },
+      { name: "power_units", value: saferData.powerUnits?.toString(), confidence: "High" },
+      { name: "drivers", value: saferData.drivers?.toString(), confidence: "High" },
+      { name: "cargo_types", value: saferData.cargoTypes, confidence: "High" },
+      { name: "safety_rating", value: saferData.safetyRating, confidence: "High" },
+    ];
+
+    const evidenceRecords = evidenceFields
+      .filter(f => f.value && f.value !== "Not Found" && f.value !== "Unknown")
+      .map(f => ({
+        carrier_id: carrierId,
+        field_name: f.name,
+        field_value: f.value!,
+        source_name: "SAFER Company Snapshot",
+        source_url: saferResult.finalUrl,
+        source_page: "Company Snapshot",
+        retrieval_date: now,
+        confidence: f.confidence,
+        notes: "",
+      }));
+
+    if (evidenceRecords.length > 0) {
+      await base44.entities.Evidence.bulkCreate(evidenceRecords);
     }
 
-    // Step 4: OOS
-    let oosData: any = null;
-    try {
-      oosData = extractCarrier(await getOos(dotToUse));
-      if (oosData) {
-        await db.entities.Evidence.create({
-          carrier_id: cid, field_name: 'out_of_service',
-          field_value: oosData.outOfService === 'Y' ? 'Out of Service' : 'In Service',
-          source_name: 'FMCSA SAFER', source_url: SAFER_URL(dotToUse),
-          source_page: 'OOS', retrieval_date: now, confidence: 'High',
-        });
-      }
-      results.steps.push({ step: 'oos', status: 'success', oos: oosData ? oosData.outOfService : null });
-    } catch (e: any) {
-      results.steps.push({ step: 'oos', status: 'failed', error: e.message });
-    }
+    await base44.entities.ActivityLog.create({
+      carrier_id: carrierId,
+      action: "SAFER lookup completed",
+      workflow: "researchCarrier",
+      details: `Extracted ${evidenceRecords.length} fields from SAFER Company Snapshot`,
+      source_url: saferResult.finalUrl,
+      status: "Success",
+      timestamp: now,
+    });
 
-    // Step 5: Authority / Insurance
-    let authorityData: any = null;
-    try {
-      const authResp = await getAuthority(dotToUse);
-      authorityData = extractCarrier(authResp);
-      const authList = extractList(authResp);
+    // STEP 2: Fetch SMS Results page (if link available)
+    if (saferData.smsLink && step !== "safer") {
+      const smsUrl = saferData.smsLink.startsWith("http") ? saferData.smsLink : `https://safer.fmcsa.dot.gov/${saferData.smsLink}`;
+      await base44.entities.ActivityLog.create({
+        carrier_id: carrierId,
+        action: "SMS retrieval started",
+        workflow: "researchCarrier",
+        source_url: smsUrl,
+        status: "Info",
+        timestamp: now,
+      });
 
-      for (const auth of authList) {
-        if (auth.insuranceType || auth.companyName || auth.policyNumber) {
-          await db.entities.InsuranceRecord.create({
-            carrier_id: cid,
-            insurance_type: auth.insuranceType || auth.authorityType || '',
-            insurance_company: auth.companyName || '',
-            policy_number: auth.policyNumber || '',
-            coverage_amount: auth.coverage ? String(auth.coverage) : '',
-            effective_date: auth.effectiveDate || '',
-            cancellation_date: auth.cancellationDate || '',
-            filing_type: auth.filingType || '',
-            authority_status: auth.status || auth.authorityStatus || '',
-            source_url: SAFER_URL(dotToUse),
+      const smsResult = await fetchPage(smsUrl);
+
+      if (smsResult.ok && smsResult.html.length > 500) {
+        const smsData = parseSmsPage(smsResult.html, smsResult.finalUrl);
+
+        if (smsData.available) {
+          // Create crash record
+          await base44.entities.CrashRecord.create({
+            carrier_id: carrierId,
+            total_crashes: smsData.totalCrashes ?? 0,
+            fatal_crashes: smsData.fatalCrashes ?? 0,
+            injury_crashes: smsData.injuryCrashes ?? 0,
+            towaway_crashes: smsData.towawayCrashes ?? 0,
+            data_period: smsData.smsDataPeriod,
+            source_url: smsResult.finalUrl,
             retrieval_date: now,
           });
+
+          // Create inspection record
+          await base44.entities.InspectionRecord.create({
+            carrier_id: carrierId,
+            total_inspections: smsData.totalInspections ?? 0,
+            inspections_with_violations: smsData.inspectionsWithViolations ?? 0,
+            inspections_without_violations: smsData.inspectionsWithoutViolations ?? 0,
+            out_of_service_count: smsData.outOfServiceCount ?? 0,
+            out_of_service_percent: smsData.outOfServicePercent,
+            source_url: smsResult.finalUrl,
+            retrieval_date: now,
+          });
+
+          // Create evidence for SMS data
+          const smsEvidence = [
+            { name: "total_inspections", value: smsData.totalInspections?.toString(), confidence: "High" },
+            { name: "total_crashes", value: smsData.totalCrashes?.toString(), confidence: "High" },
+            { name: "fatal_crashes", value: smsData.fatalCrashes?.toString(), confidence: "High" },
+            { name: "injury_crashes", value: smsData.injuryCrashes?.toString(), confidence: "High" },
+            { name: "towaway_crashes", value: smsData.towawayCrashes?.toString(), confidence: "High" },
+          ].filter(f => f.value && f.value !== "0");
+
+          if (smsEvidence.length > 0) {
+            await base44.entities.Evidence.bulkCreate(
+              smsEvidence.map(f => ({
+                carrier_id: carrierId,
+                field_name: f.name,
+                field_value: f.value!,
+                source_name: "SMS/CSA Results",
+                source_url: smsResult.finalUrl,
+                source_page: "SMS Overview",
+                retrieval_date: now,
+                confidence: f.confidence,
+                notes: "",
+              }))
+            );
+          }
+
+          stepsCompleted.push("sms");
+          await base44.entities.Carrier.update(carrierId, { sms_url: smsResult.finalUrl, lead_status: "SMS Complete", research_status: "SMS Complete" });
+          await base44.entities.ActivityLog.create({
+            carrier_id: carrierId,
+            action: "SMS retrieved",
+            workflow: "researchCarrier",
+            details: "SMS/CSA data extracted",
+            source_url: smsResult.finalUrl,
+            status: "Success",
+            timestamp: now,
+          });
+        } else {
+          stepsFailed.push("sms");
+          errors.push("SMS page did not contain parseable data (may require browser rendering)");
+          await base44.entities.ActivityLog.create({
+            carrier_id: carrierId,
+            action: "SMS retrieval - no data",
+            workflow: "researchCarrier",
+            details: "SMS page may require JavaScript rendering. Data marked as Not Available.",
+            source_url: smsResult.finalUrl,
+            status: "Warning",
+            timestamp: now,
+          });
         }
+      } else {
+        stepsFailed.push("sms");
+        errors.push(`SMS page fetch failed (status ${smsResult.status})`);
       }
-
-      await db.entities.Carrier.update(carrier.id, { research_status: 'Insurance Complete' });
-      await db.entities.ActivityLog.create({
-        carrier_id: cid, action: 'Insurance retrieved', workflow: 'researchCarrier',
-        details: authList.length + ' records', status: 'Success', timestamp: now,
-      });
-      results.steps.push({ step: 'authority', status: 'success', count: authList.length });
-    } catch (e: any) {
-      results.steps.push({ step: 'authority', status: 'failed', error: e.message });
     }
 
-    // Step 6: Docket numbers (MC/MX)
-    try {
-      const docketResp = await getDocketNumbers(dotToUse);
-      const dockets = extractList(docketResp);
-      const mcNumbers = dockets.filter((d: any) => d.docketType === 'MC').map((d: any) => d.docketNumber).join(', ');
-      const mxNumbers = dockets.filter((d: any) => d.docketType === 'MX').map((d: any) => d.docketNumber).join(', ');
-      if (mcNumbers) {
-        await db.entities.Carrier.update(carrier.id, { mc_number: mcNumbers });
-        await db.entities.Evidence.create({
-          carrier_id: cid, field_name: 'mc_number', field_value: mcNumbers,
-          source_name: 'FMCSA SAFER', source_url: SAFER_URL(dotToUse),
-          source_page: 'Docket Numbers', retrieval_date: now, confidence: 'High',
-        });
+    // STEP 3: Fetch Licensing & Insurance page (if link available)
+    if (saferData.insuranceLink && step !== "safer" && step !== "sms") {
+      const insUrl = saferData.insuranceLink.startsWith("http") ? saferData.insuranceLink : `https://safer.fmcsa.dot.gov/${saferData.insuranceLink}`;
+      const insResult = await fetchPage(insUrl);
+
+      if (insResult.ok && insResult.html.length > 500) {
+        // Parse insurance page - extract table fields
+        const insFields = extractLinks(insResult.html);
+        const insText = stripHtml(insResult.html);
+
+        // Check if page has insurance data
+        if (insText.toLowerCase().includes("insurance") || insText.toLowerCase().includes("policy")) {
+          await base44.entities.InsuranceRecord.create({
+            carrier_id: carrierId,
+            insurance_type: "General",
+            source_url: insResult.finalUrl,
+            retrieval_date: now,
+            authority_status: carrierUpdate.operating_status || "",
+          });
+
+          stepsCompleted.push("insurance");
+          await base44.entities.Carrier.update(carrierId, { lead_status: "Insurance Complete", research_status: "Insurance Complete" });
+          await base44.entities.ActivityLog.create({
+            carrier_id: carrierId,
+            action: "Insurance retrieved",
+            workflow: "researchCarrier",
+            source_url: insResult.finalUrl,
+            status: "Success",
+            timestamp: now,
+          });
+        } else {
+          stepsFailed.push("insurance");
+          errors.push("Insurance page did not contain parseable data (may require browser rendering)");
+        }
+      } else {
+        stepsFailed.push("insurance");
+        errors.push(`Insurance page fetch failed (status ${insResult.status})`);
       }
-      if (mxNumbers) {
-        await db.entities.Carrier.update(carrier.id, { mx_number: mxNumbers });
-      }
-      results.steps.push({ step: 'dockets', status: 'success', mc: mcNumbers, mx: mxNumbers });
-    } catch (e: any) {
-      results.steps.push({ step: 'dockets', status: 'failed', error: e.message });
     }
 
-    // Step 7: Operation classification
-    try {
-      const opResp = await getOperationClassification(dotToUse);
-      const opList = extractList(opResp);
-      const opTypes = opList.map((o: any) => o.opClassDesc || o.description).filter(Boolean).join(', ');
-      if (opTypes) {
-        await db.entities.Carrier.update(carrier.id, { carrier_type: opTypes });
-        await db.entities.Evidence.create({
-          carrier_id: cid, field_name: 'carrier_type', field_value: opTypes,
-          source_name: 'FMCSA SAFER', source_url: SAFER_URL(dotToUse),
-          source_page: 'Operation Classification', retrieval_date: now, confidence: 'High',
-        });
-      }
-      results.steps.push({ step: 'operation', status: 'success', types: opTypes });
-    } catch (e: any) {
-      results.steps.push({ step: 'operation', status: 'failed', error: e.message });
-    }
+    // STEP 4: Safety Qualification
+    const crashRecords = await base44.entities.CrashRecord.filter({ carrier_id: carrierId });
+    const inspectionRecords = await base44.entities.InspectionRecord.filter({ carrier_id: carrierId });
+    const crashData = crashRecords[0] || {};
+    const inspectionData = inspectionRecords[0] || {};
 
-    // Step 8: Safety qualification
-    try {
-      const updatedCarrier = (await db.entities.Carrier.filter({ carrier_id: cid }))[0];
-      const safetyResult = qualifySafety(updatedCarrier, basicsData, oosData, authorityData, null, null);
+    const safetyResult = qualifySafety({
+      safetyRating: carrierUpdate.safety_rating || "",
+      operatingStatus: carrierUpdate.operating_status || "",
+      outOfServiceDate: "",
+      totalCrashes: crashData.total_crashes ?? null,
+      fatalCrashes: crashData.fatal_crashes ?? null,
+      injuryCrashes: crashData.injury_crashes ?? null,
+      towawayCrashes: crashData.towaway_crashes ?? null,
+      totalInspections: inspectionData.total_inspections ?? null,
+      outOfServiceCount: inspectionData.out_of_service_count ?? null,
+      outOfServicePercent: inspectionData.out_of_service_percent || "",
+      basicsAlertCount: 0,
+      dataCompleteness: "70",
+    });
 
-      await db.entities.Carrier.update(carrier.id, {
-        safety_qualification: safetyResult.status,
-        safety_reasons: safetyResult.reasons.join('; '),
-        safety_positive_indicators: safetyResult.positiveIndicators.join('; '),
-        safety_risk_flags: safetyResult.riskFlags.join('; '),
-        safety_rating: (carrierData && (carrierData.rating || carrierData.safetyRating)) || '',
-        research_status: 'Safety Complete',
-      });
+    // Calculate data completeness
+    const totalFields = 20;
+    const filledFields = Object.values(carrierUpdate).filter(v => v && v !== "" && v !== null && v !== undefined).length;
+    const completenessPct = Math.round((filledFields / totalFields) * 100);
 
-      await db.entities.ActivityLog.create({
-        carrier_id: cid, action: 'Safety qualification generated', workflow: 'researchCarrier',
-        details: safetyResult.status + ': ' + safetyResult.reasons.join(', '),
-        status: 'Success', timestamp: now,
-      });
-      results.safety = safetyResult;
-    } catch (e: any) {
-      results.steps.push({ step: 'safety_qualification', status: 'failed', error: e.message });
-    }
+    await base44.entities.Carrier.update(carrierId, {
+      safety_qualification: safetyResult.qualification,
+      safety_reasons: safetyResult.reasons.join("; "),
+      safety_positive_indicators: safetyResult.positiveIndicators.join("; "),
+      safety_risk_flags: safetyResult.riskFlags.join("; "),
+      data_completeness: `${completenessPct}%`,
+      lead_status: "Safety Complete",
+      research_status: "Safety Complete",
+    });
 
-    // Step 9: Lead score
-    try {
-      const updatedCarrier = (await db.entities.Carrier.filter({ carrier_id: cid }))[0];
-      const scoreResult = calculateLeadScore(updatedCarrier, {});
-      await db.entities.Carrier.update(carrier.id, {
-        lead_score: scoreResult.score,
-        lead_score_reasons: scoreResult.reasons.join('; '),
-      });
-      results.lead_score = scoreResult;
-    } catch (e: any) {
-      results.steps.push({ step: 'lead_score', status: 'failed', error: e.message });
-    }
+    stepsCompleted.push("safety");
 
-    // Step 10: Data completeness
-    try {
-      const updatedCarrier = (await db.entities.Carrier.filter({ carrier_id: cid }))[0];
-      const completeness = calculateDataCompleteness(updatedCarrier);
-      await db.entities.Carrier.update(carrier.id, { data_completeness: completeness });
-      results.data_completeness = completeness;
-    } catch (e: any) {
-      // non-critical
-    }
+    await base44.entities.ActivityLog.create({
+      carrier_id: carrierId,
+      action: "Safety qualification generated",
+      workflow: "researchCarrier",
+      details: `Qualification: ${safetyResult.qualification}. Risk flags: ${safetyResult.riskFlags.length}. Positive indicators: ${safetyResult.positiveIndicators.length}.`,
+      status: "Success",
+      timestamp: now,
+    });
 
-    // Final status
-    const failedSteps = results.steps.filter((s: any) => s.status === 'failed');
-    const finalStatus = failedSteps.length === 0
-      ? 'Contact Complete'
-      : failedSteps.length <= 2
-        ? 'Needs Review'
-        : 'Failed';
+    // STEP 5: Lead Scoring
+    const leadScoreResult = scoreLead({
+      operatingStatus: carrierUpdate.operating_status || "",
+      equipmentMatch: false,
+      hasEmail: !!(carrierUpdate.email || carrier.email),
+      hasFax: !!(carrierUpdate.fax),
+      hasPhone: !!(carrierUpdate.phone),
+      powerUnits: carrierUpdate.power_units ?? null,
+      drivers: carrierUpdate.drivers ?? null,
+      safetyQualification: safetyResult.qualification,
+      dataCompletenessPct: completenessPct,
+      hasWebsite: !!(carrierUpdate.website || carrier.website),
+      previousContactOutcome: "",
+    });
 
-    await db.entities.Carrier.update(carrier.id, {
+    const finalStatus = safetyResult.qualification === "Qualified" && leadScoreResult.score >= 40
+      ? "Ready for Outreach"
+      : safetyResult.qualification === "High Risk"
+        ? "Do Not Contact"
+        : "Needs Review";
+
+    await base44.entities.Carrier.update(carrierId, {
+      lead_score: leadScoreResult.score,
+      lead_score_reasons: leadScoreResult.reasons.join("; "),
       lead_status: finalStatus,
-      research_status: 'Complete',
+      research_status: "Complete",
       last_researched_at: now,
     });
 
-    await db.entities.ActivityLog.create({
-      carrier_id: cid, action: 'Research completed', workflow: 'researchCarrier',
-      details: 'Status: ' + finalStatus, status: 'Success', timestamp: now,
+    stepsCompleted.push("lead_score");
+
+    await base44.entities.ActivityLog.create({
+      carrier_id: carrierId,
+      action: "Lead score generated",
+      workflow: "researchCarrier",
+      details: `Score: ${leadScoreResult.score}. Status: ${finalStatus}.`,
+      status: "Success",
+      timestamp: now,
     });
 
-    return Response.json(results);
+    const updatedCarrier = await base44.entities.Carrier.get(carrierId);
+
+    return Response.json({
+      success: true,
+      carrier_id: carrierId,
+      steps_completed: stepsCompleted,
+      steps_failed: stepsFailed,
+      errors,
+      carrier: updatedCarrier,
+      safety: safetyResult,
+      lead_score: leadScoreResult,
+      safer_url: saferResult.finalUrl,
+      sms_url: saferData.smsLink || "",
+      insurance_url: saferData.insuranceLink || "",
+    });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
   }
 }

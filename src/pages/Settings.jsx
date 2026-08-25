@@ -1,192 +1,182 @@
-import React, { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Loader2, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { Save } from "lucide-react";
 
 const SETTING_GROUPS = [
   {
-    category: 'company',
-    label: 'Company Information',
+    category: "company",
+    label: "Company Information",
     settings: [
-      { key: 'company_name', label: 'Company Name', type: 'string', desc: 'Your dispatch company name' },
-      { key: 'company_email', label: 'Company Email', type: 'string', desc: 'General contact email' },
-      { key: 'company_phone', label: 'Company Phone', type: 'string', desc: 'General contact phone' },
-      { key: 'corporate_caller_id', label: 'Corporate Caller ID', type: 'string', desc: 'Phone number for AI calling (requires voice provider verification)' },
-      { key: 'dispatch_service_description', label: 'Dispatch Service Description', type: 'text', desc: 'Used in email personalization' },
-      { key: 'email_signature', label: 'Email Signature', type: 'text', desc: 'Appended to outbound emails' },
+      { key: "company_name", label: "Company Name", type: "string" },
+      { key: "company_email", label: "Company Email", type: "string" },
+      { key: "company_phone", label: "Company Phone", type: "string" },
+      { key: "corporate_caller_id", label: "Corporate Caller ID (for voice calls)", type: "string" },
+      { key: "dispatch_service_description", label: "Dispatch Service Description", type: "text" },
+      { key: "email_signature", label: "Email Signature", type: "text" },
     ],
   },
   {
-    category: 'email',
-    label: 'Email Campaign Settings',
+    category: "email",
+    label: "Email Campaign Settings",
     settings: [
-      { key: 'email_daily_limit', label: 'Daily Send Limit', type: 'number', desc: 'Max emails per day' },
-      { key: 'email_follow_up_delay', label: 'Follow-up Delay (days)', type: 'number', desc: 'Days before sending follow-up' },
-      { key: 'email_max_follow_ups', label: 'Max Follow-ups', type: 'number', desc: 'Maximum follow-up emails per carrier' },
+      { key: "email_daily_limit", label: "Daily Email Send Limit", type: "number" },
+      { key: "email_follow_up_delay", label: "Follow-up Delay (days)", type: "number" },
+      { key: "email_max_follow_ups", label: "Max Follow-ups", type: "number" },
     ],
   },
   {
-    category: 'calling',
-    label: 'Calling Settings',
+    category: "lead_score",
+    label: "Lead Score Thresholds",
     settings: [
-      { key: 'call_script', label: 'AI Call Script', type: 'text', desc: 'Script for AI voice calls (requires voice provider integration)' },
-      { key: 'call_voice', label: 'AI Voice', type: 'string', desc: 'Voice type for AI calls (e.g. female)' },
+      { key: "lead_score_ready_threshold", label: "Ready for Outreach (min score)", type: "number" },
+      { key: "lead_score_qualified_threshold", label: "Qualified (min score)", type: "number" },
     ],
   },
   {
-    category: 'lead_score',
-    label: 'Lead Score Thresholds',
+    category: "safety",
+    label: "Safety Qualification Thresholds",
     settings: [
-      { key: 'lead_score_qualified', label: 'Qualified Threshold', type: 'number', desc: 'Minimum score to be "Qualified"' },
-      { key: 'lead_score_review', label: 'Review Threshold', type: 'number', desc: 'Minimum score for "Needs Review"' },
+      { key: "safety_oos_rate_threshold", label: "OOS Rate Threshold (%)", type: "number" },
+      { key: "safety_data_completeness_min", label: "Min Data Completeness (%)", type: "number" },
     ],
   },
   {
-    category: 'safety',
-    label: 'Safety Qualification Thresholds',
+    category: "batch",
+    label: "Batch Processing",
     settings: [
-      { key: 'safety_max_basic_alerts', label: 'Max BASIC Alerts', type: 'number', desc: 'Alerts before High Risk' },
-      { key: 'safety_max_crashes', label: 'Max Crashes (review)', type: 'number', desc: 'Crashes before Review Required' },
+      { key: "batch_size", label: "Batch Size (carriers per batch)", type: "number" },
+      { key: "automation_paused", label: "Automation Paused", type: "boolean" },
     ],
   },
   {
-    category: 'batch',
-    label: 'Batch Processing',
+    category: "calling",
+    label: "AI Calling Settings",
     settings: [
-      { key: 'batch_size', label: 'Batch Size', type: 'number', desc: 'Carriers per batch (recommended: 200/day)' },
-      { key: 'automation_paused', label: 'Automation Paused', type: 'string', desc: 'Set to "true" to pause all automation' },
+      { key: "call_script", label: "Call Script", type: "text" },
+      { key: "voice_provider", label: "Voice Provider (not yet connected)", type: "string" },
     ],
   },
 ];
 
 export default function Settings() {
   const [settings, setSettings] = useState({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  useEffect(() => { loadSettings(); }, []);
 
   const loadSettings = async () => {
     try {
-      setLoading(true);
-      const allSettings = await base44.entities.AppSetting.list('-created_date', 200);
+      const all = await base44.entities.AppSetting.list("-setting_key", 100);
       const map = {};
-      allSettings.forEach(s => { map[s.setting_key] = s; });
+      all.forEach(s => { map[s.setting_key] = s.setting_value; });
       setSettings(map);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error("Settings load error:", err);
     }
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
-      setSaving(true);
-      setSaved(false);
+      const all = await base44.entities.AppSetting.list("-setting_key", 100);
+      const existingMap = {};
+      all.forEach(s => { existingMap[s.setting_key] = s; });
+
+      const updates = [];
       for (const group of SETTING_GROUPS) {
-        for (const s of group.settings) {
-          const existing = settings[s.key];
-          const value = existing?.setting_value || '';
-          if (existing && existing.id) {
-            if (existing.setting_value !== value) {
-              await base44.entities.AppSetting.update(existing.id, { setting_value: value });
-            }
-          } else if (value) {
-            const created = await base44.entities.AppSetting.create({
-              setting_key: s.key,
+        for (const setting of group.settings) {
+          const value = settings[setting.key] || "";
+          if (existingMap[setting.key]) {
+            updates.push(base44.entities.AppSetting.update(existingMap[setting.key].id, { setting_value: value }));
+          } else {
+            updates.push(base44.entities.AppSetting.create({
+              setting_key: setting.key,
               setting_value: value,
               setting_category: group.category,
-              setting_type: s.type,
-              description: s.desc,
-            });
-            settings[s.key] = created;
+              setting_type: setting.type,
+              description: setting.label,
+            }));
           }
         }
       }
+      await Promise.all(updates);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e) {
-      setError(e.message);
+    } catch (err) {
+      alert("Save failed: " + err.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const updateSetting = (key, value) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: { ...prev[key], setting_value: value },
-    }));
+  const renderInput = (setting) => {
+    const value = settings[setting.key] || "";
+    if (setting.type === "text") {
+      return <textarea value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
+        rows={3} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
+    }
+    if (setting.type === "boolean") {
+      return <select value={value || "false"} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
+        className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+      </select>;
+    }
+    if (setting.type === "number") {
+      return <input type="number" value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
+        className="w-32 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
+    }
+    return <input type="text" value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
+      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-heading font-bold">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Configure your dispatch CRM</p>
+          <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
+          <p className="text-slate-500 text-sm mt-1">Configure your dispatch CRM</p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-          Save All
-        </Button>
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          {saving ? "Saving..." : saved ? "Saved!" : "Save Settings"}
+          <Save className="w-4 h-4" />
+        </button>
       </div>
 
-      {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4" />{error}</div>}
-      {saved && <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm flex items-center gap-2"><CheckCircle className="w-4 h-4" />Settings saved successfully</div>}
-
-      {/* Credentials info */}
-      <Card className="border-amber-200 bg-amber-50">
-        <CardHeader><CardTitle className="text-base text-amber-800">Required External Credentials</CardTitle></CardHeader>
-        <CardContent className="text-sm text-amber-900 space-y-2">
-          <p><strong>FMCSA API Key</strong> — Request a free webkey at <a href="https://mobile.fmcsa.dot.gov/QCDevsite/" target="_blank" rel="noopener noreferrer" className="underline">FMCSA Developer Portal</a>. Add it as <code className="bg-amber-100 px-1 rounded">FMCSA_API_KEY</code> in Environment Variables. Required for all carrier research.</p>
-          <p><strong>SMTP Credentials</strong> — Configure <code className="bg-amber-100 px-1 rounded">SMTP_HOST</code>, <code className="bg-amber-100 px-1 rounded">SMTP_PORT</code>, <code className="bg-amber-100 px-1 rounded">SMTP_USER</code>, <code className="bg-amber-100 px-1 rounded">SMTP_PASS</code>, <code className="bg-amber-100 px-1 rounded">SMTP_FROM</code> in Environment Variables. Required for email campaigns. Uses your corporate email account securely.</p>
-          <p><strong>Voice Provider</strong> — AI calling requires a voice provider integration (e.g. Retell, Vapi, or Twilio). Not yet connected. Calling queue is ready; outbound calls will activate after provider setup.</p>
-        </CardContent>
-      </Card>
-
       {SETTING_GROUPS.map(group => (
-        <Card key={group.category}>
-          <CardHeader><CardTitle className="text-base">{group.label}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {group.settings.map(s => (
-              <div key={s.key}>
-                <Label className="text-sm">{s.label}</Label>
-                {s.type === 'text' ? (
-                  <Textarea
-                    value={settings[s.key]?.setting_value || ''}
-                    onChange={e => updateSetting(s.key, e.target.value)}
-                    className="mt-1"
-                    placeholder={s.desc}
-                  />
-                ) : (
-                  <Input
-                    type={s.type === 'number' ? 'number' : 'text'}
-                    value={settings[s.key]?.setting_value || ''}
-                    onChange={e => updateSetting(s.key, e.target.value)}
-                    className="mt-1"
-                    placeholder={s.desc}
-                  />
-                )}
-                <p className="text-xs text-muted-foreground mt-1">{s.desc}</p>
+        <div key={group.category} className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
+          <h2 className="font-semibold text-slate-900 mb-4">{group.label}</h2>
+          <div className="space-y-4">
+            {group.settings.map(setting => (
+              <div key={setting.key}>
+                <label className="text-sm text-slate-600 block mb-1">{setting.label}</label>
+                {renderInput(setting)}
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ))}
+
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+        <h3 className="font-medium text-amber-800 text-sm mb-1">Email Sending</h3>
+        <p className="text-xs text-amber-700">
+          Emails are sent using the platform's built-in email service. To reach external carrier email addresses,
+          a paid plan with a custom domain may be required. Alternatively, connect an external email API provider
+          (Resend, SendGrid, Postmark) via the Settings → Environment Variables in your dashboard.
+        </p>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="font-medium text-blue-800 text-sm mb-1">AI Voice Calling</h3>
+        <p className="text-xs text-blue-700">
+          The calling queue and data model are ready. Actual outbound calling requires connecting a voice provider
+          integration (e.g., Retell AI, Vapi, Twilio). The system will use your corporate business number as caller ID
+          (subject to provider verification). The AI will identify itself as an AI assistant and will not misrepresent
+          itself as a human.
+        </p>
+      </div>
     </div>
   );
 }

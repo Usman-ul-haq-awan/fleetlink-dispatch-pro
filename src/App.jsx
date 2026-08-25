@@ -4,29 +4,28 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
-// Add page imports here
+import { Navigate } from 'react-router-dom';
 import Dashboard from '@/pages/Dashboard';
-import Carriers from '@/pages/Carriers';
+import CarrierDatabase from '@/pages/CarrierDatabase';
 import CarrierDetail from '@/pages/CarrierDetail';
-import Import from '@/pages/Import';
-import Campaigns from '@/pages/Campaigns';
-import Calling from '@/pages/Calling';
-import Handoffs from '@/pages/Handoffs';
-import Onboarding from '@/pages/Onboarding';
+import CarrierResearch from '@/pages/CarrierResearch';
+import EmailCampaigns from '@/pages/EmailCampaigns';
+import CallingQueue from '@/pages/CallingQueue';
+import HumanHandoff from '@/pages/HumanHandoff';
+import OnboardingPage from '@/pages/OnboardingPage';
+import ImportExport from '@/pages/ImportExport';
 import ActivityLog from '@/pages/ActivityLog';
 import Settings from '@/pages/Settings';
-import Export from '@/pages/Export';
+import Layout from '@/components/Layout';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
-import Layout from '@/components/Layout';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import { Navigate } from 'react-router-dom';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -37,28 +36,36 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Render the main app with auth routes and protected routes
+  // Handle user not registered error
+  if (authError?.type === 'user_not_registered') {
+    return <UserNotRegisteredError />;
+  }
+
+  const isAuthenticated = !authError;
+
   return (
     <Routes>
+      {/* Auth routes - accessible without authentication */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/carriers" element={<Carriers />} />
-          <Route path="/carriers/:id" element={<CarrierDetail />} />
-          <Route path="/import" element={<Import />} />
-          <Route path="/campaigns" element={<Campaigns />} />
-          <Route path="/calling" element={<Calling />} />
-          <Route path="/handoffs" element={<Handoffs />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/activity" element={<ActivityLog />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/export" element={<Export />} />
-        </Route>
+
+      {/* Protected routes - require authentication */}
+      <Route element={isAuthenticated ? <Layout /> : <Navigate to="/login" replace />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/carriers" element={<CarrierDatabase />} />
+        <Route path="/carriers/:id" element={<CarrierDetail />} />
+        <Route path="/research" element={<CarrierResearch />} />
+        <Route path="/campaigns" element={<EmailCampaigns />} />
+        <Route path="/calling" element={<CallingQueue />} />
+        <Route path="/handoffs" element={<HumanHandoff />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/import-export" element={<ImportExport />} />
+        <Route path="/activity" element={<ActivityLog />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
+
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

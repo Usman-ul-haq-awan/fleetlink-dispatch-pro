@@ -1,113 +1,107 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { secrets } from 'base44:runtime';
-import nodemailer from 'npm:nodemailer@6.9.14';
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 
 export default async function(req: Request): Promise<Response> {
-  const base44 = createClientFromRequest(req);
-
   try {
+    const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { email_log_id, carrier_id, to_email, subject, body: emailBody, campaign_id, is_test } = body;
+    const { carrier_id, campaign_id, subject, body: emailBody, to_email } = body;
 
-    if (!to_email || !subject || !emailBody) {
-      return Response.json({ error: 'to_email, subject, and body are required' }, { status: 400 });
+    if (!carrier_id) return Response.json({ error: "carrier_id is required" }, { status: 400 });
+
+    const carrier = await base44.entities.Carrier.get(carrier_id);
+    if (!carrier) return Response.json({ error: "Carrier not found" }, { status: 404 });
+
+    const recipientEmail = to_email || carrier.email;
+    if (!recipientEmail) return Response.json({ error: "No email address available for this carrier" }, { status: 400 });
+
+    if (carrier.do_not_contact) {
+      return Response.json({ error: "Carrier is marked Do Not Contact" }, { status: 400 });
     }
 
-    // Check SMTP config
-    const smtpHost = secrets.get('SMTP_HOST');
-    const smtpPort = secrets.get('SMTP_PORT');
-    const smtpUser = secrets.get('SMTP_USER');
-    const smtpPass = secrets.get('SMTP_PASS');
-    const smtpFrom = secrets.get('SMTP_FROM');
-
-    if (!smtpHost || !smtpUser || !smtpPass || !smtpFrom) {
-      return Response.json({
-        error: 'SMTP not configured',
-        message: 'Configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM in Settings → Environment Variables. Use your corporate email SMTP credentials.',
-      }, { status: 503 });
-    }
-
-    const db = base44.asServiceRole;
     const now = new Date().toISOString();
 
-    // Check DNC
-    if (carrier_id) {
-      const carriers = await db.entities.Carrier.filter({ carrier_id });
-      if (carriers.length && carriers[0].do_not_contact) {
-        return Response.json({ error: 'Carrier is on Do Not Contact list', carrier_id }, { status: 403 });
+    // Get campaign settings if available
+    let fromName = "Dispatch Team";
+    if (campaign_id) {
+      const campaign = await base44.entities.EmailCampaign.get(campaign_id);
+      if (campaign) {
+        // Use campaign template if subject/body not provided
+        const settings = await base44.entities.AppSetting.filter({ setting_key: "company_name" });
+        if (settings.length > 0) fromName = settings[0].setting_value;
       }
     }
 
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: parseInt(smtpPort || '587'),
-      secure: parseInt(smtpPort || '587') === 465,
-      auth: { user: smtpUser, pass: smtpPass },
+    // Send email using built-in integration
+    const sendResult = await base44.asServiceRole.integrations.Core.SendEmail({
+      to: recipientEmail,
+      subject: subject || `Dispatch Services for ${carrier.legal_name || carrier.dba_name || "your company"}`,
+      body: emailBody || "",
+      from_name: fromName,
     });
 
-    // Send
-    const info = await transporter.sendMail({
-      from: smtpFrom,
-      to: to_email,
-      subject,
-      text: emailBody,
+    // Create email log
+    await base44.entities.EmailLog.create({
+      carrier_id: carrier_id,
+      campaign_id: campaign_id || "",
+      to_email: recipientEmail,
+      subject: subject || "",
+      body: emailBody || "",
+      direction: "Outbound",
+      status: "Sent",
+      sent_at: now,
     });
 
-    // Log the email
-    let logId = email_log_id;
-    if (!logId) {
-      const log = await db.entities.EmailLog.create({
-        carrier_id: carrier_id || '',
-        campaign_id: campaign_id || '',
-        to_email,
-        subject,
-        body: emailBody,
-        direction: 'Outbound',
-        status: 'Sent',
-        is_follow_up: false,
-        follow_up_number: 0,
-        sent_at: now,
-        message_id: info.messageId || '',
-      });
-      logId = log.id;
-    } else {
-      await db.entities.EmailLog.update(logId, {
-        status: 'Sent',
-        sent_at: now,
-        message_id: info.messageId || '',
-      });
+    // Update carrier status
+    await base44.entities.Carrier.update(carrier_id, {
+      lead_status: "Contacted",
+    });
+
+    // Update campaign stats if applicable
+    if (campaign_id) {
+      const campaign = await base44.entities.EmailCampaign.get(campaign_id);
+      if (campaign) {
+        await base44.entities.EmailCampaign.update(campaign_id, {
+          total_sent: (campaign.total_sent || 0) + 1,
+        });
+      }
     }
 
-    // Activity log
-    if (carrier_id) {
-      await db.entities.ActivityLog.create({
-        carrier_id,
-        action: is_test ? 'Test email sent' : 'Email sent',
-        workflow: 'sendCampaignEmail',
-        details: `To: ${to_email}, Subject: ${subject}`,
-        status: 'Success',
-        timestamp: now,
-      });
-    }
-
-    return Response.json({
-      success: true,
-      message_id: info.messageId,
-      log_id: logId,
+    // Create activity log
+    await base44.entities.ActivityLog.create({
+      carrier_id: carrier_id,
+      action: "Email sent",
+      workflow: "sendCampaignEmail",
+      details: `Subject: ${subject || ""}. To: ${recipientEmail}`,
+      status: "Success",
+      timestamp: now,
     });
+
+    return Response.json({ success: true, message: "Email sent", to: recipientEmail });
   } catch (error) {
-    // Update log as failed if we have a log_id
+    // Log the failure
     try {
-      const body = await req.clone().json();
-      if (body.email_log_id) {
-        const base44 = createClientFromRequest(req);
-        await base44.asServiceRole.entities.EmailLog.update(body.email_log_id, {
-          status: 'Failed',
+      const base44 = createClientFromRequest(req);
+      const body = await req.json().catch(() => ({}));
+      if (body.carrier_id) {
+        await base44.entities.EmailLog.create({
+          carrier_id: body.carrier_id,
+          campaign_id: body.campaign_id || "",
+          to_email: body.to_email || "",
+          subject: body.subject || "",
+          body: body.body || "",
+          status: "Failed",
           error_message: error.message,
+        });
+        await base44.entities.ActivityLog.create({
+          carrier_id: body.carrier_id,
+          action: "Email send failed",
+          workflow: "sendCampaignEmail",
+          details: error.message,
+          status: "Error",
+          timestamp: new Date().toISOString(),
         });
       }
     } catch {}

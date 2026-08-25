@@ -1,15 +1,17 @@
 // SAFER/SMS HTML parsing utilities for FMCSA public web pages.
-// Uses regex-based extraction since the FMCSA pages are server-rendered HTML tables.
+// Uses targeted regex extraction based on the actual SAFER page HTML structure.
 
 export function stripHtml(html: string): string {
   return html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<div class="hidden">[\s\S]*?<\/div>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/td>/gi, " | ")
     .replace(/<\/tr>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
+    .replace(/<img[^>]*>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&nbsp;/g, " ")
@@ -20,6 +22,13 @@ export function stripHtml(html: string): string {
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function cleanHtml(html: string): string {
+  return html
+    .replace(/<div class="hidden">[\s\S]*?<\/div>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<img[^>]*>/gi, " ");
 }
 
 export function extractLinks(html: string): Array<{ text: string; url: string }> {
@@ -36,24 +45,100 @@ export function extractLinks(html: string): Array<{ text: string; url: string }>
   return links;
 }
 
-// Extract label-value pairs from SAFER HTML table rows.
-// The SAFER page uses <td>Label:</td><td>Value</td> patterns.
+// Extract a field value by its label using the SAFER page's specific HTML structure.
+// Pattern: <A class="querylabel" href="...">Label:</A></TH> <TD class="queryfield">Value</TD>
+function extractField(html: string, label: string): string {
+  const clean = cleanHtml(html);
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // Primary pattern: label in <A class="querylabel"> followed by <TD class="queryfield">
+  const primaryRegex = new RegExp(
+    escapedLabel + "\\s*:</A>\\s*</TH>\\s*<TD[^>]*class=[\"']?queryfield[\"']?[^>]*>([\\s\\S]*?)</TD>",
+    "i"
+  );
+  const primaryMatch = clean.match(primaryRegex);
+  if (primaryMatch && primaryMatch[1]) {
+    const value = stripHtml(primaryMatch[1]).trim();
+    if (value && !isLayoutText(value)) return value;
+  }
+
+  // Fallback 1: label in any tag followed by next cell
+  const fallbackRegex = new RegExp(
+    escapedLabel + "\\s*:</[^>]*>\\s*</t[dh]>\\s*<t[dh][^>]*>([\\s\\S]*?)</t[dh]>",
+    "i"
+  );
+  const fallbackMatch = clean.match(fallbackRegex);
+  if (fallbackMatch && fallbackMatch[1]) {
+    const value = stripHtml(fallbackMatch[1]).trim();
+    if (value && !isLayoutText(value)) return value;
+  }
+
+  // Fallback 2: label and value in same text (Label: Value)
+  const text = stripHtml(clean);
+  const textRegex = new RegExp(escapedLabel + "\\s*:\\s*([^|\\n]+)", "i");
+  const textMatch = text.match(textRegex);
+  if (textMatch && textMatch[1]) {
+    const value = textMatch[1].trim();
+    if (value && !isLayoutText(value) && value.length < 200) return value;
+  }
+
+  return "";
+}
+
+function isLayoutText(value: string): boolean {
+  const layoutMarkers = ["SAFER Layout", "SAFER Table", "querylabel", "For formatting"];
+  return layoutMarkers.some(m => value.includes(m));
+}
+
+// Extract checked items from a checkbox section (Cargo Carried, Carrier Operation).
+// Pattern: <TD class="queryfield">X</TD> <TD>...Item Name...</TD>
+function extractCheckedItems(html: string, sectionLabel: string, stopLabel?: string): string {
+  const clean = cleanHtml(html);
+  const sectionStart = clean.indexOf(sectionLabel);
+  if (sectionStart < 0) return "";
+
+  // Find the end of the section (next section label or default limit)
+  let sectionEnd = sectionStart + 8000;
+  if (stopLabel) {
+    const nextStart = clean.indexOf(stopLabel, sectionStart + sectionLabel.length);
+    if (nextStart > 0) sectionEnd = nextStart;
+  }
+
+  const section = clean.substring(sectionStart, sectionEnd);
+
+  // Find all checked items: <TD class="queryfield">X</TD> followed by item name
+  const checkedRegex = /<TD[^>]*class=["']?queryfield["']?[^>]*>\s*X\s*<\/TD>\s*<TD[^>]*>([\s\S]*?)<\/TD>/gi;
+  const items: string[] = [];
+  let match;
+  while ((match = checkedRegex.exec(section)) !== null) {
+    const itemName = stripHtml(match[1]).trim();
+    if (itemName && itemName.length > 1 && !isLayoutText(itemName)) {
+      items.push(itemName);
+    }
+  }
+
+  return items.join(", ");
+}
+
+// Fallback: extract all label-value pairs from table cells
 export function extractTableFields(html: string): Record<string, string> {
+  const clean = cleanHtml(html);
   const fields: Record<string, string> = {};
-  // Get all table cells content in order
-  const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
   const cells: string[] = [];
   let match;
-  while ((match = cellRegex.exec(html)) !== null) {
-    cells.push(stripHtml(match[1]).trim());
+  while ((match = cellRegex.exec(clean)) !== null) {
+    const text = stripHtml(match[1]).trim();
+    if (text && !isLayoutText(text) && text !== "|") {
+      cells.push(text);
+    }
   }
-  // Pair up label cells (ending with ":") with the next cell as value
   for (let i = 0; i < cells.length - 1; i++) {
     const label = cells[i];
     const value = cells[i + 1];
     if (label && label.endsWith(":") && value && !value.endsWith(":")) {
       const cleanLabel = label.replace(/:$/, "").trim();
-      if (cleanLabel && value !== "" && value !== "|") {
+      if (cleanLabel && value !== "" && !isLayoutText(value)) {
         fields[cleanLabel] = value.replace(/\|/g, "").trim();
       }
     }
@@ -93,65 +178,108 @@ export interface SaferData {
 }
 
 export function parseSaferSnapshot(html: string, sourceUrl: string): SaferData {
-  const fields = extractTableFields(html);
   const links = extractLinks(html);
-  const text = stripHtml(html);
 
-  // Extract company name from the header (appears as <b>COMPANY NAME</b> near USDOT Number)
+  // Extract company name from the header
   const nameMatch = html.match(/<b>\s*([A-Z][^<]{2,100})\s*<\/b>\s*<br>\s*USDOT/i);
-  const legalName = nameMatch ? nameMatch[1].trim() : (fields["Legal Name"] || "");
+  const legalName = nameMatch ? nameMatch[1].trim() : extractField(html, "Legal Name");
+
+  // Extract USDOT from the header
+  const usdotMatch = html.match(/USDOT Number:\s*(\d+)/i);
+  const usdotNumber = usdotMatch ? usdotMatch[1] : extractField(html, "USDOT Number");
 
   // Find SMS and Insurance links
   const smsLink = links.find(l => l.text.toLowerCase().includes("sms"))?.url || "";
-  const insuranceLink = links.find(l => l.text.toLowerCase().includes("licensing") || l.text.toLowerCase().includes("insurance"))?.url || "";
+  const insuranceLink = links.find(l =>
+    l.text.toLowerCase().includes("licensing") || l.text.toLowerCase().includes("insurance")
+  )?.url || "";
 
-  // Parse power units and drivers as numbers
-  const powerUnitsStr = fields["Power Units"] || "";
-  const driversStr = fields["Drivers"] || "";
-  const powerUnits = powerUnitsStr ? parseInt(powerUnitsStr, 10) : null;
-  const drivers = driversStr ? parseInt(driversStr, 10) : null;
+  // Extract fields using targeted regex
+  const mcRaw = extractField(html, "MC/MX Number");
+  let mcNumber = mcRaw.replace(/^MC-?/i, "").trim();
+  // Fallback: look for MC number in link text (e.g., "MC-679812")
+  if (!mcNumber) {
+    const mcLink = links.find(l => l.text.includes("MC-") || l.text.match(/MC\d{3,}/i));
+    if (mcLink) {
+      const mcMatch = mcLink.text.match(/MC-?(\d+)/i);
+      if (mcMatch) mcNumber = mcMatch[1];
+    }
+  }
+  const dbaName = extractField(html, "DBA Name");
+  const operatingStatus = extractField(html, "USDOT Status") || extractField(html, "Operating Status");
+  const phone = extractField(html, "Phone");
+  const fax = extractField(html, "Fax");
+  // Safety rating is in the Review Information table as "Rating:" field in a <TH> (not in an <A> tag)
+  const cleanForRating = cleanHtml(html);
+  const ratingMatch = cleanForRating.match(/<TH[^>]*>\s*Rating:\s*<\/TH>\s*<TD[^>]*class=["']?queryfield["']?[^>]*>([\s\S]*?)<\/TD>/i);
+  const safetyRating = ratingMatch ? stripHtml(ratingMatch[1]).trim() : "";
+  const outOfServiceDate = extractField(html, "Out of Service Date");
+  const operatingAuthorityStatus = extractField(html, "Operating Authority Status");
+  const reviewDate = extractField(html, "Rating Date") || extractField(html, "Last Review Date") || extractField(html, "Review Date");
 
-  // Extract address components from the full address field
-  const fullAddress = fields["Physical Address"] || fields["Address"] || "";
+  // Power units and drivers
+  const powerUnitsStr = extractField(html, "Power Units");
+  const driversStr = extractField(html, "Drivers");
+  const powerUnits = powerUnitsStr ? parseInt(powerUnitsStr.replace(/[^0-9]/g, ""), 10) : null;
+  const drivers = driversStr ? parseInt(driversStr.replace(/[^0-9]/g, ""), 10) : null;
+
+  // Address
+  const fullAddress = extractField(html, "Physical Address") || extractField(html, "Mailing Address");
   const addressParts = parseAddress(fullAddress);
+
+  // Cargo types and carrier operation (checkbox sections)
+  const carrierOperation = extractCheckedItems(html, "Carrier Operation", "Cargo Carried");
+  const cargoTypes = extractCheckedItems(html, "Cargo Carried");
+
+  // Entity type and carrier type
+  const entityType = extractField(html, "Entity Type");
+  const carrierType = extractField(html, "Carrier Type");
+
+  const rawFields = extractTableFields(html);
 
   return {
     legalName,
-    dbaName: fields["DBA Name"] || fields["DBA"] || "",
-    usdotNumber: fields["USDOT Number"] || "",
-    mcNumber: fields["MC/MX Number"] || "",
-    mxNumber: fields["MX Number"] || "",
-    operatingStatus: fields["USDOT Status"] || fields["Operating Status"] || "",
-    carrierType: fields["Carrier Type"] || "",
-    entityType: fields["Entity Type"] || "",
+    dbaName,
+    usdotNumber,
+    mcNumber,
+    mxNumber: extractField(html, "MX Number"),
+    operatingStatus,
+    carrierType,
+    entityType,
     address: addressParts.street || fullAddress,
-    city: addressParts.city || fields["City"] || "",
-    state: addressParts.state || fields["State"] || "",
-    zip: addressParts.zip || fields["ZIP"] || "",
+    city: addressParts.city,
+    state: addressParts.state,
+    zip: addressParts.zip,
     country: "US",
-    phone: fields["Phone"] || "",
-    fax: fields["Fax"] || "",
+    phone,
+    fax,
     powerUnits: !isNaN(powerUnits as number) ? powerUnits : null,
     drivers: !isNaN(drivers as number) ? drivers : null,
-    cargoTypes: fields["Cargo Carried"] || fields["Cargo"] || "",
-    carrierOperation: fields["Carrier Operation"] || "",
-    safetyRating: fields["Safety Rating"] || "",
-    reviewDate: fields["Last Review Date"] || "",
-    outOfServiceDate: fields["Out of Service Date"] || "",
-    operatingAuthorityStatus: fields["Operating Authority Status"] || "",
+    cargoTypes,
+    carrierOperation,
+    safetyRating,
+    reviewDate,
+    outOfServiceDate,
+    operatingAuthorityStatus,
     smsLink,
     insuranceLink,
-    rawFields: fields,
+    rawFields,
     links,
     sourceUrl,
   };
 }
 
 function parseAddress(address: string): { street: string; city: string; state: string; zip: string } {
-  // Try to parse "STREET, CITY, ST ZIP" or "STREET\nCITY, ST ZIP"
-  const match = address.match(/^(.+?),\s*([A-Za-z .]+),\s*([A-Z]{2})\s*(\d{5}(-\d{4})?)\s*$/);
-  if (match) {
-    return { street: match[1].trim(), city: match[2].trim(), state: match[3], zip: match[4] };
+  if (!address) return { street: "", city: "", state: "", zip: "" };
+  // Format: "STREET\nCITY, ST  ZIP" (from <br> in HTML)
+  const match1 = address.match(/^(.+?)\n\s*([A-Za-z .]+),\s*([A-Z]{2})\s*(\d{5}(-\d{4})?)\s*$/);
+  if (match1) {
+    return { street: match1[1].trim(), city: match1[2].trim(), state: match1[3], zip: match1[4] };
+  }
+  // Format: "STREET, CITY, ST ZIP"
+  const match2 = address.match(/^(.+?),\s*([A-Za-z .]+),\s*([A-Z]{2})\s*(\d{5}(-\d{4})?)\s*$/);
+  if (match2) {
+    return { street: match2[1].trim(), city: match2[2].trim(), state: match2[3], zip: match2[4] };
   }
   return { street: address, city: "", state: "", zip: "" };
 }
@@ -182,52 +310,46 @@ export interface SmsData {
 
 export function parseSmsPage(html: string, sourceUrl: string): SmsData {
   const text = stripHtml(html);
-  const fields = extractTableFields(html);
-
-  // Check if the page has actual SMS data or is an error/redirect page
-  const hasSmsData = text.toLowerCase().includes("basic") || text.toLowerCase().includes("inspection");
+  const hasSmsData = text.toLowerCase().includes("basic") || text.toLowerCase().includes("inspection") || text.toLowerCase().includes("crash");
 
   if (!hasSmsData) {
     return {
-      totalInspections: null,
-      inspectionsWithViolations: null,
-      inspectionsWithoutViolations: null,
-      outOfServiceCount: null,
-      outOfServicePercent: "",
-      totalCrashes: null,
-      fatalCrashes: null,
-      injuryCrashes: null,
-      towawayCrashes: null,
-      basics: [],
-      carrierSegment: "",
-      smsDataDate: "",
-      smsDataPeriod: "",
-      sourceUrl,
-      available: false,
+      totalInspections: null, inspectionsWithViolations: null, inspectionsWithoutViolations: null,
+      outOfServiceCount: null, outOfServicePercent: "",
+      totalCrashes: null, fatalCrashes: null, injuryCrashes: null, towawayCrashes: null,
+      basics: [], carrierSegment: "", smsDataDate: "", smsDataPeriod: "",
+      sourceUrl, available: false,
     };
   }
 
   const numField = (label: string): number | null => {
-    const val = fields[label];
+    const val = extractField(html, label);
     if (!val) return null;
     const n = parseInt(val.replace(/[^0-9]/g, ""), 10);
     return isNaN(n) ? null : n;
   };
 
+  const numFromText = (label: string): number | null => {
+    const regex = new RegExp(label + "\\s*:?\\s*(\\d+)", "i");
+    const match = text.match(regex);
+    if (match) return parseInt(match[1], 10);
+    return null;
+  };
+
   return {
-    totalInspections: numField("Total Inspections") || numField("Inspections"),
-    inspectionsWithViolations: numField("Inspections with Violations") || numField("With Violations"),
-    inspectionsWithoutViolations: numField("Inspections without Violations") || numField("Without Violations"),
-    outOfServiceCount: numField("Out of Service") || numField("OOS"),
-    outOfServicePercent: fields["Out of Service Percent"] || fields["OOS %"] || "",
-    totalCrashes: numField("Total Crashes") || numField("Crashes"),
-    fatalCrashes: numField("Fatal Crashes") || numField("Fatal"),
-    injuryCrashes: numField("Injury Crashes") || numField("Injury"),
-    towawayCrashes: numField("Towaway Crashes") || numField("Tow"),
+    totalInspections: numField("Total Inspections") || numFromText("Total Inspections") || numFromText("Inspections"),
+    inspectionsWithViolations: numField("Inspections with Violations") || numFromText("With Violations"),
+    inspectionsWithoutViolations: numField("Inspections without Violations") || numFromText("Without Violations"),
+    outOfServiceCount: numField("Out of Service") || numFromText("Out of Service") || numFromText("OOS"),
+    outOfServicePercent: extractField(html, "Out of Service Percent") || "",
+    totalCrashes: numField("Total Crashes") || numFromText("Total Crashes") || numFromText("Crashes"),
+    fatalCrashes: numField("Fatal Crashes") || numFromText("Fatal Crashes") || numFromText("Fatal"),
+    injuryCrashes: numField("Injury Crashes") || numFromText("Injury Crashes") || numFromText("Injury"),
+    towawayCrashes: numField("Towaway Crashes") || numFromText("Towaway") || numFromText("Tow"),
     basics: [],
-    carrierSegment: fields["Carrier Segment"] || "",
-    smsDataDate: fields["SMS Data Date"] || fields["Data Date"] || "",
-    smsDataPeriod: fields["SMS Data Period"] || fields["Data Period"] || "",
+    carrierSegment: extractField(html, "Carrier Segment") || "",
+    smsDataDate: extractField(html, "SMS Data Date") || extractField(html, "Data Date") || "",
+    smsDataPeriod: extractField(html, "SMS Data Period") || extractField(html, "Data Period") || "",
     sourceUrl,
     available: true,
   };

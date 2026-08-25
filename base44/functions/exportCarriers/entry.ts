@@ -1,82 +1,91 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+
+function csvEscape(value: any): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
 
 export default async function(req: Request): Promise<Response> {
-  const base44 = createClientFromRequest(req);
-
   try {
+    const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    let statusFilter = '';
-    try {
-      const body = await req.json();
-      statusFilter = body.status || '';
-    } catch {
-      const url = new URL(req.url);
-      statusFilter = url.searchParams.get('status') || '';
+    const url = new URL(req.url);
+    const statusFilter = url.searchParams.get("status") || "";
+    const minScore = url.searchParams.get("min_score") || "";
+
+    // Query carriers
+    let carriers;
+    if (statusFilter) {
+      carriers = await base44.entities.Carrier.filter({ lead_status: statusFilter }, "-updated_date", 500);
+    } else {
+      carriers = await base44.entities.Carrier.list("-updated_date", 500);
     }
 
-    const db = base44.asServiceRole;
-    const query: any = {};
-    if (statusFilter) query.lead_status = statusFilter;
+    // Filter by min score if provided
+    if (minScore) {
+      const min = parseInt(minScore, 10);
+      carriers = carriers.filter(c => (c.lead_score || 0) >= min);
+    }
 
-    const carriers = await db.entities.Carrier.filter(query, '-created_date', 2000);
-
-    // Get evidence for source URLs
-    const allEvidence = await db.entities.Evidence.filter({}, '-retrieval_date', 5000);
-    const evidenceByCarrier: Record<string, string> = {};
-    for (const ev of allEvidence) {
-      if (!evidenceByCarrier[ev.carrier_id]) {
-        evidenceByCarrier[ev.carrier_id] = ev.source_url || '';
-      } else {
-        evidenceByCarrier[ev.carrier_id] += ' | ' + (ev.source_url || '');
+    // Get evidence records for source URLs
+    const carrierIds = carriers.map(c => c.id);
+    const allEvidence = await base44.entities.Evidence.list("-retrieval_date", 500);
+    const evidenceByCarrier: Record<string, string[]> = {};
+    allEvidence.forEach(e => {
+      if (carrierIds.includes(e.carrier_id) && e.source_url) {
+        if (!evidenceByCarrier[e.carrier_id]) evidenceByCarrier[e.carrier_id] = [];
+        if (!evidenceByCarrier[e.carrier_id].includes(e.source_url)) {
+          evidenceByCarrier[e.carrier_id].push(e.source_url);
+        }
       }
-    }
+    });
 
+    // Build CSV
     const headers = [
-      'Carrier Name', 'DBA', 'USDOT', 'MC', 'MX', 'Status', 'Address',
-      'City', 'State', 'Zip', 'Phone', 'Fax', 'Email', 'Owner', 'Contact',
-      'Power Units', 'Drivers', 'Cargo', 'Carrier Segment', 'Equipment Type',
-      'Equipment Confidence', 'Safety Qualification', 'Safety Rating',
-      'Total Crashes', 'Fatal Crashes', 'Injury Crashes', 'Towaway Crashes',
-      'Insurance Company', 'Lead Score', 'Lead Status', 'Source URLs', 'Last Verified',
+      "Carrier Name", "DBA", "USDOT", "MC", "MX", "Status", "Operating Status",
+      "Address", "City", "State", "ZIP", "Phone", "Fax", "Email", "Owner", "Contact",
+      "Power Units", "Drivers", "Cargo", "Carrier Segment",
+      "Equipment Type", "Safety Qualification", "Safety Rating",
+      "Total Inspections", "OOS Info", "Total Crashes", "Fatal Crashes", "Injury Crashes", "Towaway Crashes",
+      "Lead Score", "Lead Status", "Source URLs", "Last Verified",
     ];
 
-    function csvEscape(val: any): string {
-      if (val === null || val === undefined) return '';
-      const s = String(val);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return '"' + s.replace(/"/g, '""') + '"';
-      }
-      return s;
-    }
+    const rows = carriers.map(c => [
+      c.legal_name || "", c.dba_name || "", c.usdot_number || "", c.mc_number || "", c.mx_number || "",
+      c.lead_status || "", c.operating_status || "",
+      c.address || "", c.city || "", c.state || "", c.zip || "",
+      c.phone || "", c.fax || "", c.email || "", c.owner_name || "", c.contact_name || "",
+      c.power_units ?? "", c.drivers ?? "", c.cargo_types || "", c.carrier_segment || "",
+      c.equipment_types || "", c.safety_qualification || "", c.safety_rating || "",
+      "", "", "", "", "", "", // Inspection/crash data would be joined from related entities
+      c.lead_score ?? "", c.lead_status || "",
+      (evidenceByCarrier[c.id] || []).join(" | "),
+      c.last_researched_at || "",
+    ]);
 
-    const rows: string[] = [];
-    rows.push(headers.join(','));
+    const csv = [headers, ...rows]
+      .map(row => row.map(csvEscape).join(","))
+      .join("\n");
 
-    for (const c of carriers) {
-      const row = [
-        c.legal_name, c.dba_name, c.usdot_number, c.mc_number, c.mx_number,
-        c.operating_status, c.address, c.city, c.state, c.zip,
-        c.phone, c.fax, c.email, c.owner_name, c.contact_name,
-        c.power_units, c.drivers, c.cargo_types, c.carrier_segment,
-        c.equipment_types, '', c.safety_qualification, c.safety_rating,
-        '', '', '', '', '',
-        c.lead_score, c.lead_status,
-        evidenceByCarrier[c.carrier_id] || c.safer_url || '',
-        c.last_researched_at || '',
-      ].map(csvEscape).join(',');
-      rows.push(row);
-    }
+    await base44.entities.ActivityLog.create({
+      action: "Carrier data exported",
+      workflow: "exportCarriers",
+      details: `Exported ${carriers.length} carriers to CSV`,
+      status: "Success",
+      timestamp: new Date().toISOString(),
+    });
 
-    const csv = rows.join('\n');
-
-    return new Response(csv, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': `attachment; filename=carriers_export_${Date.now()}.csv`,
-      },
+    return Response.json({
+      success: true,
+      csv,
+      filename: `carriers_export_${new Date().toISOString().split("T")[0]}.csv`,
+      count: carriers.length,
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
