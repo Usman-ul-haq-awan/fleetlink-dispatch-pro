@@ -13,6 +13,8 @@ export default function CarrierResearch() {
   const [errors, setErrors] = useState([]);
   const [activeResearch, setActiveResearch] = useState(null);
   const [autoRunning, setAutoRunning] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverTarget, setDiscoverTarget] = useState(200);
   const stopRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -142,6 +144,60 @@ export default function CarrierResearch() {
     setProgress(p => ({ ...p, current: "Stopping after current batch..." }));
   };
 
+  // MC-number discovery: start from the highest MC in the database + 1,
+  // research each successive MC via the browser worker, keep valid carriers,
+  // skip MCs that don't resolve to a real carrier, until the database holds
+  // `discoverTarget` carriers or the user stops the run.
+  const startDiscovery = async () => {
+    stopRef.current = false;
+    setDiscovering(true);
+    setProcessing(true);
+    try {
+      const all = await base44.entities.Carrier.list("-created_date", 1000);
+      let found = all.length;
+      let maxMc = 0;
+      all.forEach(c => {
+        const num = parseInt(String(c.mc_number || "").replace(/[^0-9]/g, ""), 10);
+        if (!isNaN(num) && num > maxMc) maxMc = num;
+      });
+      let currentMc = maxMc;
+      setProgress({ total: discoverTarget, done: found, failed: 0, current: `Discovering from MC-${currentMc + 1} · ${found}/${discoverTarget} found` });
+
+      while (!stopRef.current && found < discoverTarget) {
+        currentMc += 1;
+        setProgress(p => ({ ...p, current: `Researching MC-${currentMc} · ${found}/${discoverTarget} carriers found` }));
+        try {
+          const res = await base44.functions.invoke("researchCarrierBrowser", { mc: String(currentMc) });
+          const data = res.data;
+          if (data.success && data.carrier && data.carrier.legal_name) {
+            found += 1;
+            setProgress(p => ({ ...p, done: found }));
+          } else {
+            // No real carrier for this MC — remove the auto-created stub so it
+            // doesn't pollute the database or inflate the count.
+            if (data.carrier_id) {
+              try { await base44.entities.Carrier.delete(data.carrier_id); } catch {}
+            }
+            setProgress(p => ({ ...p, failed: p.failed + 1 }));
+          }
+        } catch (err) {
+          setProgress(p => ({ ...p, failed: p.failed + 1 }));
+        }
+        await load();
+      }
+    } finally {
+      setDiscovering(false);
+      setProcessing(false);
+      setProgress(p => ({ ...p, current: stopRef.current ? "Stopped" : "Discovery complete" }));
+      stopRef.current = false;
+    }
+  };
+
+  const stopDiscovery = () => {
+    stopRef.current = true;
+    setProgress(p => ({ ...p, current: "Stopping after current MC..." }));
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -168,6 +224,40 @@ export default function CarrierResearch() {
             {processing && !autoRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             Research Batch (10)
           </button>
+        </div>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="font-medium text-slate-800 text-sm flex items-center gap-2">
+              <Truck className="w-4 h-4" /> MC Number Discovery
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Starts from the highest MC number in your database + 1, researches each successive MC via the worker,
+              keeps valid carriers and skips MCs that don't resolve — until the database holds the target count.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500">Target</label>
+            <input type="number" min="1" value={discoverTarget}
+              onChange={e => setDiscoverTarget(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              disabled={discovering}
+              className="w-20 px-2 py-1.5 text-sm border border-slate-300 rounded-md disabled:opacity-50" />
+            {!discovering ? (
+              <button onClick={startDiscovery} disabled={processing}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                <Play className="w-4 h-4" />
+                Auto-Discover (MC+1)
+              </button>
+            ) : (
+              <button onClick={stopDiscovery}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
+                <AlertCircle className="w-4 h-4" />
+                Stop Discovery
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
