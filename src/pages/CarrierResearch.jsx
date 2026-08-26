@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2 } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
+import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
 
@@ -13,10 +14,18 @@ export default function CarrierResearch() {
   const [errors, setErrors] = useState([]);
   const [activeResearch, setActiveResearch] = useState(null);
   const [autoRunning, setAutoRunning] = useState(false);
-  const [discovering, setDiscovering] = useState(false);
   const [discoverTarget, setDiscoverTarget] = useState(200);
   const stopRef = useRef(false);
   const [failedMcs, setFailedMcs] = useState([]);
+  const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
+
+  useEffect(() => {
+    const unsub = subscribeDiscovery((snap) => {
+      setDiscovery(snap);
+      setFailedMcs(snap.failedMcs);
+    });
+    return unsub;
+  }, []);
 
   const buildFailureReason = (data, err) => {
     if (err) {
@@ -184,61 +193,10 @@ export default function CarrierResearch() {
     setProgress(p => ({ ...p, current: "Stopping after current batch..." }));
   };
 
-  // MC-number discovery: start from the highest MC in the database + 1,
-  // research each successive MC via the browser worker, keep valid carriers,
-  // skip MCs that don't resolve to a real carrier, until the database holds
-  // `discoverTarget` carriers or the user stops the run.
-  const startDiscovery = async () => {
-    stopRef.current = false;
-    setDiscovering(true);
-    setProcessing(true);
-    try {
-      const all = await base44.entities.Carrier.list("-created_date", 1000);
-      let found = all.length;
-      let maxMc = 0;
-      all.forEach(c => {
-        const num = parseInt(String(c.mc_number || "").replace(/[^0-9]/g, ""), 10);
-        if (!isNaN(num) && num > maxMc) maxMc = num;
-      });
-      let currentMc = maxMc;
-      setProgress({ total: discoverTarget, done: found, failed: 0, current: `Discovering from MC-${currentMc + 1} · ${found}/${discoverTarget} found` });
-
-      while (!stopRef.current && found < discoverTarget) {
-        currentMc += 1;
-        setProgress(p => ({ ...p, current: `Researching MC-${currentMc} · ${found}/${discoverTarget} carriers found` }));
-        try {
-          const res = await base44.functions.invoke("researchCarrierBrowser", { mc: String(currentMc) });
-          const data = res.data;
-          if (data.success && data.carrier && data.carrier.legal_name) {
-            found += 1;
-            setProgress(p => ({ ...p, done: found }));
-          } else {
-            // No real carrier for this MC — remove the auto-created stub so it
-            // doesn't pollute the database or inflate the count.
-            if (data.carrier_id) {
-              try { await base44.entities.Carrier.delete(data.carrier_id); } catch {}
-            }
-            recordFailure(`MC-${currentMc}`, data);
-            setProgress(p => ({ ...p, failed: p.failed + 1 }));
-          }
-        } catch (err) {
-          recordFailure(`MC-${currentMc}`, null, err);
-          setProgress(p => ({ ...p, failed: p.failed + 1 }));
-        }
-        await load();
-      }
-    } finally {
-      setDiscovering(false);
-      setProcessing(false);
-      setProgress(p => ({ ...p, current: stopRef.current ? "Stopped" : "Discovery complete" }));
-      stopRef.current = false;
-    }
-  };
-
-  const stopDiscovery = () => {
-    stopRef.current = true;
-    setProgress(p => ({ ...p, current: "Stopping after current MC..." }));
-  };
+  // MC-number discovery runs in a module-level background runner so it keeps
+  // working even when the user navigates away from this page.
+  const startDiscovery = () => startRunnerDiscovery(discoverTarget);
+  const stopDiscovery = () => stopRunnerDiscovery();
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -284,9 +242,9 @@ export default function CarrierResearch() {
             <label className="text-xs text-slate-500">Target</label>
             <input type="number" min="1" value={discoverTarget}
               onChange={e => setDiscoverTarget(Math.max(1, parseInt(e.target.value, 10) || 1))}
-              disabled={discovering}
+              disabled={discovery.running}
               className="w-20 px-2 py-1.5 text-sm border border-slate-300 rounded-md disabled:opacity-50" />
-            {!discovering ? (
+            {!discovery.running ? (
               <button onClick={startDiscovery} disabled={processing}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
                 <Play className="w-4 h-4" />
@@ -302,6 +260,21 @@ export default function CarrierResearch() {
           </div>
         </div>
       </div>
+
+      {discovery.running && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-emerald-800 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> {discovery.progress.current}
+            </span>
+            <span className="text-sm text-emerald-600">{discovery.progress.done} found, {discovery.progress.failed} failed</span>
+          </div>
+          <div className="w-full bg-emerald-100 rounded-full h-2">
+            <div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${discovery.progress.total ? (discovery.progress.done + discovery.progress.failed) / discovery.progress.total * 100 : 0}%` }} />
+          </div>
+          <p className="text-xs text-emerald-700 mt-2">Running in the background — you can navigate to other pages and this will keep going.</p>
+        </div>
+      )}
 
       {processing && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
@@ -343,7 +316,7 @@ export default function CarrierResearch() {
               <button onClick={exportFailedMcs} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md">
                 <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
-              <button onClick={() => setFailedMcs([])} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md">
+              <button onClick={clearRunnerFailedMcs} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md">
                 <Trash2 className="w-3.5 h-3.5" /> Clear
               </button>
             </div>
