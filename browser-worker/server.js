@@ -28,13 +28,17 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/research', authMiddleware, async (req, res) => {
-  const { usdot, mc } = req.body || {};
+  const { usdot, mc, steps } = req.body || {};
   if (!usdot && !mc) {
     return res.status(400).json({ error: 'Either "usdot" or "mc" is required in the request body.' });
   }
   const start = Date.now();
   try {
-    const result = await runResearch({ usdot: usdot ? String(usdot) : null, mc: mc ? String(mc) : null });
+    const result = await runResearch({
+      usdot: usdot ? String(usdot) : null,
+      mc: mc ? String(mc) : null,
+      steps: Array.isArray(steps) ? steps : null,
+    });
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
     console.log(`Research complete: USDOT=${usdot || 'n/a'} MC=${mc || 'n/a'} (${elapsed}s) steps=${result.steps.length}`);
     res.json(result);

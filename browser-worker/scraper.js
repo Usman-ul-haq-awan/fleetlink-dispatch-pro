@@ -175,7 +175,15 @@ async function safeGoto(page, url, timeoutMs) {
   }
 }
 
-async function runResearch({ usdot, mc }) {
+async function runResearch({ usdot, mc, steps }) {
+  // Selected steps. If not provided → run all (backward compat).
+  // Company Snapshot is always required (entry point + identity validation).
+  const ALL_STEPS = ['company_snapshot', 'sms_overview', 'sms_profile', 'carrier_history', 'registration', 'insurance', 'inspection_crash', 'safety_rating'];
+  const enabled = Array.isArray(steps) && steps.length > 0
+    ? new Set([...['company_snapshot'], ...steps.filter(s => ALL_STEPS.includes(s))])
+    : new Set(ALL_STEPS);
+  const isEnabled = (k) => enabled.has(k);
+
   const browser = await chromium.launch({
   headless: true,
   executablePath: require('path').join(__dirname, 'node_modules/playwright-core/.local-browsers/chromium-1124/chrome-linux/chrome'),
@@ -315,7 +323,7 @@ async function runResearch({ usdot, mc }) {
     };
 
     // STEP 2 — SMS Results (open the exact discovered link)
-    if (smsLink) {
+    if (smsLink && isEnabled('sms_overview')) {
       const gotoSms = await safeGoto(page, smsLink.href, 30000);
       if (gotoSms.ok) {
         await page.waitForSelector('table, .SMS, #ctl00_MainContent_Summary', { timeout: 6000 }).catch(() => {});
@@ -357,7 +365,7 @@ async function runResearch({ usdot, mc }) {
         const regLink = findLinkByText(smsLinks, ['Carrier Registration Details', 'Registration Details', 'Registration', 'Register']);
 
         // STEP 3 — Complete SMS Profile / Company Safety Profile (often holds the carrier email)
-        if (profileLink) {
+        if (profileLink && isEnabled('sms_profile')) {
           const g = await safeGoto(page, profileLink.href, 30000);
           if (g.ok) {
             const profPairs = await extractLabelValuePairs(page);
@@ -374,7 +382,7 @@ async function runResearch({ usdot, mc }) {
         }
 
         // STEP 4 — Carrier History
-        if (historyLink) {
+        if (historyLink && isEnabled('carrier_history')) {
           const g = await safeGoto(page, historyLink.href, 30000);
           if (g.ok) {
             const hPairs = await extractLabelValuePairs(page);
@@ -391,7 +399,7 @@ async function runResearch({ usdot, mc }) {
         }
 
         // STEP 5 — Carrier Registration Details (same MC number)
-        if (regLink) {
+        if (regLink && isEnabled('registration')) {
           const g = await safeGoto(page, regLink.href, 30000);
           if (g.ok) {
             const regPairs = await extractLabelValuePairs(page);
@@ -420,7 +428,7 @@ async function runResearch({ usdot, mc }) {
     // snapshot between steps (saves several full page loads).
 
     // STEP 6 — Licensing & Insurance (also a source of registration/authority + email)
-    if (insuranceLink) {
+    if (insuranceLink && isEnabled('insurance')) {
       const g = await safeGoto(page, insuranceLink.href, 30000);
       if (g.ok) {
         await page.waitForSelector('table', { timeout: 6000 }).catch(() => {});
@@ -437,7 +445,7 @@ async function runResearch({ usdot, mc }) {
         // Fallback: if registration wasn't found on the SMS page, the L&I page
         // for this carrier often links to the operating-authority / registration
         // record for the same MC number.
-        if (result.registration.status !== 'ok') {
+        if (result.registration.status !== 'ok' && isEnabled('registration')) {
           const liRegLink = findLinkByText(insLinks, ['Registration', 'Operating Authority', 'Authority', 'Docket']);
           if (liRegLink) {
             const rg = await safeGoto(page, liRegLink.href, 30000);
@@ -459,7 +467,7 @@ async function runResearch({ usdot, mc }) {
     }
 
     // STEP 7 — Inspections/Crashes
-    if (inspectionsLink) {
+    if (inspectionsLink && isEnabled('inspection_crash')) {
       const g = await safeGoto(page, inspectionsLink.href, 30000);
       if (g.ok) {
         const inspPairs = await extractLabelValuePairs(page);
@@ -476,7 +484,7 @@ async function runResearch({ usdot, mc }) {
     }
 
     // STEP 8 — Safety Rating
-    if (safetyRatingLink) {
+    if (safetyRatingLink && isEnabled('safety_rating')) {
       const g = await safeGoto(page, safetyRatingLink.href, 30000);
       if (g.ok) {
         const srPairs = await extractLabelValuePairs(page);
@@ -488,11 +496,14 @@ async function runResearch({ usdot, mc }) {
         result.safety_rating = { status: 'error', error_state: 'NETWORK_ERROR', message: g.error };
         stepDone('Safety Rating', 'failed', safetyRatingLink.href, { error: g.error });
       }
-    } else {
+    } else if (isEnabled('safety_rating')) {
       // Safety rating may be displayed directly on the Company Snapshot
       const rating = getField(snapshotPairs, ['Rating', 'Safety Rating']);
       result.safety_rating = { status: rating ? 'ok' : 'not_found', source_url: snapshotUrl, retrieval_date: nowIso(), rating: rating || '' };
       stepDone('Safety Rating', rating ? 'ok' : 'not_found', snapshotUrl);
+    } else {
+      result.safety_rating = { status: 'skipped' };
+      stepDone('Safety Rating', 'skipped', null);
     }
 
     // STEP 9 — Contact extraction. Email is harvested across every page

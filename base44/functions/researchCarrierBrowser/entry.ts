@@ -18,7 +18,14 @@ export default async function(req: Request): Promise<Response> {
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { carrier_id, usdot, mc } = body;
+    const { carrier_id, usdot, mc, steps } = body;
+
+    // Normalize selected steps. If omitted/null → run all steps (backward compat).
+    // Company Snapshot is always included — it's the entry point + identity check.
+    const ALL_STEP_KEYS = ["company_snapshot", "sms_overview", "sms_profile", "carrier_history", "registration", "insurance", "inspection_crash", "safety_rating"];
+    const selectedSteps: string[] = Array.isArray(steps) && steps.length > 0
+      ? Array.from(new Set([...["company_snapshot"], ...steps.filter((s: string) => ALL_STEP_KEYS.includes(s))]))
+      : ALL_STEP_KEYS;
 
     // Find or create the carrier
     let carrier;
@@ -82,7 +89,7 @@ export default async function(req: Request): Promise<Response> {
       workerRes = await fetch(`${workerUrl.replace(/\/$/, "")}/research`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ usdot: usdot || carrier.usdot_number, mc: mc || carrier.mc_number }),
+        body: JSON.stringify({ usdot: usdot || carrier.usdot_number, mc: mc || carrier.mc_number, steps: selectedSteps }),
       });
     } catch (err: any) {
       await base44.entities.ResearchError.create({

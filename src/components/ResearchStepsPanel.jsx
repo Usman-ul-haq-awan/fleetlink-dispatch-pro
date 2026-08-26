@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle, XCircle, Clock, Loader2, AlertCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Loader2, AlertCircle, ExternalLink, MinusCircle } from "lucide-react";
 
 const DEFAULT_STEPS = [
   { name: "Company Snapshot", status: "pending" },
@@ -16,6 +16,7 @@ function StepIcon({ status }) {
   if (status === "ok") return <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />;
   if (status === "failed") return <XCircle className="w-4 h-4 text-red-500 shrink-0" />;
   if (status === "not_found") return <Clock className="w-4 h-4 text-slate-300 shrink-0" />;
+  if (status === "skipped") return <MinusCircle className="w-4 h-4 text-slate-300 shrink-0" />;
   return <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />;
 }
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2 } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
+import ResearchStepsSelector, { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
@@ -16,6 +17,7 @@ export default function CarrierResearch() {
   const [autoRunning, setAutoRunning] = useState(false);
   const [discoverTarget, setDiscoverTarget] = useState(200);
   const [discoverStartMc, setDiscoverStartMc] = useState("");
+  const [selectedSteps, setSelectedSteps] = useState(ALL_STEP_KEYS);
   const stopRef = useRef(false);
   const [failedMcs, setFailedMcs] = useState([]);
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
@@ -95,6 +97,7 @@ export default function CarrierResearch() {
         carrier_id: carrier.id,
         usdot: carrier.usdot_number,
         mc: carrier.mc_number,
+        steps: selectedSteps,
       });
       const data = res.data;
       setActiveResearch((prev) =>
@@ -232,6 +235,8 @@ export default function CarrierResearch() {
           </button>
         </div>
       </div>
+
+      <ResearchStepsSelector selected={selectedSteps} onChange={setSelectedSteps} />
 
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
