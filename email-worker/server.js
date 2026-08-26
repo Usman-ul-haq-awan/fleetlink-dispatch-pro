@@ -34,19 +34,31 @@ app.get('/health', (req, res) => {
 });
 
 app.post('/send-email', authMiddleware, async (req, res) => {
-  const { to, subject, body, from_email, from_name } = req.body || {};
+  // Accepts Resend-style payload: { from, to (string|array), subject, text|html }
+  // Also accepts legacy { from_email, from_name, to, body } for backward compat.
+  const b = req.body || {};
+  const to = b.to;
+  const subject = b.subject;
+  const fromAddr = b.from || (b.from_email
+    ? `${b.from_name ? `${b.from_name} ` : ''}<${b.from_email}>`
+    : (b.from_name || ''));
+  const text = b.text != null ? b.text : (b.html != null ? undefined : (b.body || ''));
+  const html = b.html;
 
-  if (!to || !subject) {
-    return res.status(400).json({ error: 'to and subject are required' });
+  if (!to || !subject || !fromAddr) {
+    return res.status(400).json({ error: 'from, to, and subject are required' });
   }
   if (!RESEND_API_KEY) {
     return res.status(500).json({ error: 'RESEND_API_KEY is not configured on the worker' });
   }
 
   try {
-    const fromAddr = from_email
-      ? `${from_name ? `${from_name} ` : ''}<${from_email}>`
-      : (from_name || 'Dispatch Team');
+    const payload = {
+      from: fromAddr,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+    };
+    if (html != null) payload.html = html; else payload.text = text || '';
 
     const apiRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -54,12 +66,7 @@ app.post('/send-email', authMiddleware, async (req, res) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: fromAddr,
-        to: [to],
-        subject,
-        text: body || '',
-      }),
+      body: JSON.stringify(payload),
     });
 
     const data = await apiRes.json().catch(() => ({}));
@@ -72,8 +79,8 @@ app.post('/send-email', authMiddleware, async (req, res) => {
       });
     }
 
-    console.log(`Email sent to ${to}: ${data.id}`);
-    res.json({ success: true, messageId: data.id });
+    console.log(`Email sent to ${JSON.stringify(to)}: ${data.id}`);
+    res.json({ success: true, id: data.id, messageId: data.id });
   } catch (err) {
     console.error('Email send error:', err.message);
     res.status(500).json({ error: err.message });
