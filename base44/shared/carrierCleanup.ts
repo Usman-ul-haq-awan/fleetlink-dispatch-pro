@@ -27,3 +27,13 @@ export function isAuthorizedStatus(operatingStatus: string): boolean {
   if (!operatingStatus) return false;
   return operatingStatus.toUpperCase().includes("AUTHORIZED FOR");
 }
+
+// Checks whether an operating status string explicitly indicates the carrier
+// is NOT authorized. Returns false for ambiguous values like "ACTIVE" (which
+// is the USDOT Status, not the Operating Authority Status) or empty strings —
+// those should be re-checked rather than deleted.
+export function isExplicitlyUnauthorized(operatingStatus: string): boolean {
+  if (!operatingStatus) return false;
+  const s = operatingStatus.toUpperCase().trim();
+  return s.includes("NOT AUTHORIZED") || s.includes("OUT-OF-SERVICE") || s.includes("OUT OF SERVICE");
+}

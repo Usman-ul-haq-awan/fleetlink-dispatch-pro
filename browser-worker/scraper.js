@@ -260,7 +260,8 @@ async function runResearch({ usdot, mc, steps }) {
     const pageUsdot = getField(snapshotPairs, ['USDOT Number', 'USDOT']);
     const pageMc = getField(snapshotPairs, ['MC Number', 'MC/MX', 'Docket Number', 'MC']);
     const mx = getField(snapshotPairs, ['MX Number']);
-    const operatingStatus = getField(snapshotPairs, ['Operating Status', 'USDOT Status']);
+    const operatingStatus = getField(snapshotPairs, ['Operating Authority Status', 'Operating Status']);
+    const usdotStatus = getField(snapshotPairs, ['USDOT Status']);
     const entityType = getField(snapshotPairs, ['Entity Type', 'Carrier Type']);
     const address = getField(snapshotPairs, ['Physical Address', 'Address']);
     const phone = getField(snapshotPairs, ['Phone', 'Telephone']);
@@ -301,6 +302,7 @@ async function runResearch({ usdot, mc, steps }) {
       retrieval_date: nowIso(),
       legal_name: legalName,
       operating_status: operatingStatus,
+      usdot_status: usdotStatus,
       entity_type: entityType,
       power_units: powerUnits,
       drivers: drivers,

@@ -10,7 +10,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { secrets } from "base44:runtime";
 import { qualifySafety } from "../../shared/safetyEngine.ts";
 import { scoreLead } from "../../shared/leadScoreEngine.ts";
-import { deleteCarrierAndRelated, isAuthorizedStatus } from "../../shared/carrierCleanup.ts";
+import { deleteCarrierAndRelated, isAuthorizedStatus, isExplicitlyUnauthorized } from "../../shared/carrierCleanup.ts";
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -139,17 +139,17 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ success: false, carrier_id: carrierId, error: "IDENTITY_MISMATCH", steps: data.steps || [] });
     }
 
-    // Operating Authority Status gate — when enabled, only keep carriers whose
-    // operating authority status contains "AUTHORIZED FOR". Unauthorized carriers
-    // are removed from the database entirely.
+    // Operating Authority Status gate — when enabled, remove carriers that are
+    // explicitly "NOT AUTHORIZED" or "OUT-OF-SERVICE". Carriers with "AUTHORIZED FOR"
+    // status are kept. Ambiguous/empty status is kept (not enough data to delete).
     if (selectedSteps.includes("operation_status") && data.operation_status) {
       const liveStatus = data.operation_status.operating_status || data.safer?.operating_status || "";
-      if (!isAuthorizedStatus(liveStatus)) {
+      if (isExplicitlyUnauthorized(liveStatus)) {
         await deleteCarrierAndRelated(base44, carrierId);
         await base44.entities.ActivityLog.create({
           action: "Carrier removed — not authorized (research gate)",
           workflow: "researchCarrierBrowser",
-          details: `Operating Status: ${liveStatus || "NOT AUTHORIZED"}`,
+          details: `Operating Authority Status: ${liveStatus}`,
           status: "Warning",
           timestamp: now,
         });
