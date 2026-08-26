@@ -5,6 +5,7 @@ import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 import ResearchStepsSelector, { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
 import { subscribe as subscribeAudit, startAudit as startRunnerAudit, stopAudit as stopRunnerAudit } from "@/lib/auditRunner";
+import { listAllCarriers } from "@/lib/paginatedList";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
 
@@ -75,7 +76,7 @@ export default function CarrierResearch() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const all = await base44.entities.Carrier.list("-updated_date", 500);
+      const all = await listAllCarriers("-updated_date");
       const queued = all.filter(c => QUEUE_STATUSES.includes(c.lead_status));
       setCarriers(queued);
       const researchErrors = await base44.entities.ResearchError.filter({ status: "Manual Review" }, "-timestamp", 50);
@@ -179,7 +180,7 @@ export default function CarrierResearch() {
     setProcessing(true);
     try {
       while (!stopRef.current) {
-        const all = await base44.entities.Carrier.list("-updated_date", 500);
+        const all = await listAllCarriers("-updated_date");
         const queued = all.filter(c =>
           c.usdot_number && ["Imported", "Queued", "Failed"].includes(c.lead_status)
         );

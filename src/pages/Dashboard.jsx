@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
+import { listAllCarriers } from "@/lib/paginatedList";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -19,7 +20,7 @@ export default function Dashboard() {
 
   const loadDashboard = async () => {
     try {
-      const carriers = await base44.entities.Carrier.list("-updated_date", 500);
+      const carriers = await listAllCarriers("-updated_date");
       const emails = await base44.entities.EmailLog.list("-sent_at", 200);
       const calls = await base44.entities.CallLog.list("-call_date", 200);
       const handoffs = await base44.entities.Handoff.list("-created_at", 100);

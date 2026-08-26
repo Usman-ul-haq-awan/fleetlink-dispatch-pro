@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { listAllCarriers } from "@/lib/paginatedList";
 
 const STATUS_COLORS = {
   "Imported": "bg-slate-100 text-slate-700",
@@ -53,7 +54,7 @@ export default function CarrierDatabase() {
   const loadCarriers = useCallback(async (reset = false) => {
     setLoading(true);
     try {
-      const all = await base44.entities.Carrier.list("-updated_date", 500);
+      const all = await listAllCarriers("-updated_date");
       let filtered = all;
 
       if (search) {

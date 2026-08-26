@@ -84,19 +84,35 @@ export function stopDiscovery() {
   patchProgress({ current: "Stopping after current MC..." });
 }
 
+// Paginates through ALL carriers to get the true count and max MC number.
+// The SDK list() returns max 5000 per call, so we page with skip for larger DBs.
+async function countAllCarriers() {
+  let count = 0;
+  let maxMc = 0;
+  const limit = 5000;
+  let skip = 0;
+  while (true) {
+    const batch = await base44.entities.Carrier.list("-created_date", limit, skip);
+    if (!batch || batch.length === 0) break;
+    count += batch.length;
+    batch.forEach((c) => {
+      const num = parseInt(String(c.mc_number || "").replace(/[^0-9]/g, ""), 10);
+      if (!isNaN(num) && num > maxMc) maxMc = num;
+    });
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  return { count, maxMc };
+}
+
 export async function startDiscovery(target, startMc) {
   if (state.running) return;
   stopRequested = false;
   const targetCount = Math.max(1, target || state.target);
   patch({ running: true, target: targetCount, failedMcs: [] });
   try {
-    const all = await base44.entities.Carrier.list("-created_date", 1000);
-    let found = all.length;
-    let maxMc = 0;
-    all.forEach((c) => {
-      const num = parseInt(String(c.mc_number || "").replace(/[^0-9]/g, ""), 10);
-      if (!isNaN(num) && num > maxMc) maxMc = num;
-    });
+    const { count, maxMc } = await countAllCarriers();
+    let found = count;
     // If a starting MC is provided, begin one below it so the loop's first
     // increment lands exactly on the requested number (follows the +1 rule).
     let currentMc = startMc ? Math.max(0, startMc - 1) : maxMc;
