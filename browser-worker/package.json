@@ -11,9 +11,10 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "nodemailer": "^6.9.14",
     "playwright": "1.45.0"
   },
   "engines": {
-  "node": "20.x"
-}
+    "node": "20.x"
+  }
 }

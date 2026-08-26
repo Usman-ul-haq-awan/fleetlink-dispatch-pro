@@ -1,4 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { sendEmail } from "../../shared/emailSender.ts";
 
 // Test email protocol — sends to ANY address (your own inbox) to verify the
 // email pipeline works. Does NOT require a carrier and does NOT change any
@@ -24,11 +25,11 @@ export default async function sendTestEmail(req: Request): Promise<Response> {
 
     const now = new Date().toISOString();
 
-    const sendResult = await base44.asServiceRole.integrations.Core.SendEmail({
+    const sendResult = await sendEmail(base44, {
       to: to_email,
       subject,
       body: emailBody || "",
-      from_name: fromName,
+      fromName,
     });
 
     // Log the test send (carrier_id optional, only for traceability)

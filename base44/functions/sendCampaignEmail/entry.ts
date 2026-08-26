@@ -1,4 +1,5 @@
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
+import { sendEmail } from "../../shared/emailSender.ts";
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -34,12 +35,12 @@ export default async function(req: Request): Promise<Response> {
       }
     }
 
-    // Send email using built-in integration
-    const sendResult = await base44.asServiceRole.integrations.Core.SendEmail({
+    // Send via company SMTP (if configured) or built-in email service
+    const sendResult = await sendEmail(base44, {
       to: recipientEmail,
       subject: subject || `Dispatch Services for ${carrier.legal_name || carrier.dba_name || "your company"}`,
       body: emailBody || "",
-      from_name: fromName,
+      fromName,
     });
 
     // Create email log

@@ -56,6 +56,23 @@ const SETTING_GROUPS = [
       { key: "voice_provider", label: "Voice Provider (not yet connected)", type: "string" },
     ],
   },
+  {
+    category: "smtp",
+    label: "SMTP Email Server (Outgoing)",
+    settings: [
+      { key: "smtp_host", label: "SMTP Host", type: "string" },
+      { key: "smtp_port", label: "SMTP Port", type: "number" },
+      { key: "smtp_encryption", label: "Encryption", type: "select", options: [
+        { value: "SSL", label: "SSL/TLS (port 465)" },
+        { value: "STARTTLS", label: "STARTTLS (port 587)" },
+        { value: "None", label: "None" },
+      ]},
+      { key: "smtp_username", label: "SMTP Username", type: "string" },
+      { key: "smtp_password", label: "SMTP Password", type: "password" },
+      { key: "smtp_from_email", label: "From Email Address", type: "string" },
+      { key: "smtp_from_name", label: "From Name", type: "string" },
+    ],
+  },
 ];
 
 export default function Settings() {
@@ -156,6 +173,17 @@ export default function Settings() {
       return <input type="number" value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
         className="w-32 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
     }
+    if (setting.type === "password") {
+      return <input type="password" value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
+        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
+    }
+    if (setting.type === "select") {
+      return <select value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
+        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">Select...</option>
+        {setting.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>;
+    }
     return <input type="text" value={value} onChange={e => setSettings({...settings, [setting.key]: e.target.value})}
       className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
   };
@@ -211,9 +239,14 @@ export default function Settings() {
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
         <h3 className="font-medium text-amber-800 text-sm mb-1">Email Sending</h3>
         <p className="text-xs text-amber-700">
-          Emails are sent using the platform's built-in email service. To reach external carrier email addresses,
-          a paid plan with a custom domain may be required. Alternatively, connect an external email API provider
-          (Resend, SendGrid, Postmark) via the Settings → Environment Variables in your dashboard.
+          Configure your company SMTP server above to send outgoing emails to carriers. When SMTP is configured,
+          all emails (test and campaign) route through your SMTP server via the browser worker. If left blank,
+          the built-in email service is used, which only reaches registered app users without a connected custom domain.
+        </p>
+        <p className="text-xs text-amber-700 mt-2">
+          <strong>Note:</strong> After adding the SMTP fields, redeploy the browser worker
+          (<code className="bg-amber-100 px-1 rounded">npm install</code> then restart) so it picks up the new
+          <code className="bg-amber-100 px-1 rounded mx-1">nodemailer</code> dependency and the /send-email endpoint.
         </p>
       </div>
 

@@ -5,6 +5,7 @@
 // See README.md for deployment instructions.
 
 const express = require('express');
+const nodemailer = require('nodemailer');
 const { runResearch } = require('./scraper');
 
 const app = express();
@@ -40,6 +41,40 @@ app.post('/research', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Research error:', err.message);
     res.status(500).json({ error: err.message, errors: [{ step: 'Worker', state: 'BROWSER_ERROR', message: err.message }] });
+  }
+});
+
+app.post('/send-email', authMiddleware, async (req, res) => {
+  const { smtp, from_email, from_name, to, subject, body } = req.body || {};
+  if (!smtp || !smtp.host || !to || !subject) {
+    return res.status(400).json({ error: 'smtp.host, to, and subject are required' });
+  }
+  try {
+    const encryption = smtp.encryption || 'STARTTLS';
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port || 587,
+      secure: encryption === 'SSL',
+      requireTLS: encryption === 'STARTTLS',
+      auth: smtp.username ? { user: smtp.username, pass: smtp.password || '' } : undefined,
+    });
+
+    const fromAddr = from_email
+      ? `${from_name || ''} <${from_email}>`
+      : (from_name || '');
+
+    const info = await transporter.sendMail({
+      from: fromAddr,
+      to,
+      subject,
+      text: body || '',
+    });
+
+    console.log(`Email sent to ${to}: ${info.messageId}`);
+    res.json({ success: true, messageId: info.messageId });
+  } catch (err) {
+    console.error('Email send error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
