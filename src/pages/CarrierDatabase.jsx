@@ -201,7 +201,70 @@ export default function CarrierDatabase() {
           </div>
         ) : (
             <table className="min-w-full w-max text-sm">
-...
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">USDOT</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">MC</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">State</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Equipment</th>
+                  <th className="text-center px-4 py-3 font-medium text-slate-600">Units</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Safety</th>
+                  <th className="text-center px-4 py-3 font-medium text-slate-600">Score</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
+                  <th className="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {carriers.map(carrier => (
+                  <tr key={carrier.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      <Link to={`/carriers/${carrier.id}`} className="font-medium text-slate-900 hover:text-blue-600">
+                        {carrier.legal_name || carrier.dba_name || "Unknown"}
+                      </Link>
+                      {carrier.dba_name && carrier.legal_name && (
+                        <p className="text-xs text-slate-400">DBA: {carrier.dba_name}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{carrier.usdot_number || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{carrier.mc_number || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{carrier.state || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600 text-xs">{carrier.equipment_types || "—"}</td>
+                    <td className="px-4 py-3 text-center text-slate-600">{carrier.power_units || "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SAFETY_COLORS[carrier.safety_qualification] || SAFETY_COLORS["Not Assessed"]}`}>
+                        {carrier.safety_qualification || "Not Assessed"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {carrier.lead_score ? (
+                        <span className="font-semibold text-slate-700">{carrier.lead_score}</span>
+                      ) : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[carrier.lead_status] || "bg-slate-100 text-slate-700"}`}>
+                        {carrier.lead_status || "Imported"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <Link to={`/carriers/${carrier.id}`}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="View Details">
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        {carrier.usdot_number && carrier.lead_status === "Imported" && (
+                          <button onClick={() => handleResearch(carrier.id, carrier.usdot_number)}
+                            disabled={researching}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-50"
+                            title="Research Carrier">
+                            <RefreshCw className={`w-4 h-4 ${researching ? "animate-spin" : ""}`} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
         )}
       </div>
