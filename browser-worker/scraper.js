@@ -81,6 +81,33 @@ async function extractText(page) {
   return await page.evaluate(() => document.body ? document.body.innerText : '');
 }
 
+// Harvest email addresses from the current page — both mailto: links and
+// emails appearing in visible text. FMCSA pages often expose the carrier's
+// email only on the SMS "Company Safety Profile" / record page or the L&I
+// registration page, so this is run on every page we visit.
+async function extractEmails(page) {
+  return await page.evaluate(() => {
+    const emails = new Set();
+    document.querySelectorAll('a[href^="mailto:"]').forEach(a => {
+      const e = (a.getAttribute('href') || '').replace(/^mailto:/i, '').trim();
+      if (e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) emails.add(e);
+    });
+    const text = document.body ? document.body.innerText : '';
+    const re = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m[0])) emails.add(m[0]);
+    }
+    return Array.from(emails);
+  });
+}
+
+function pickEmail(emails) {
+  if (!emails || emails.length === 0) return '';
+  const nonGov = emails.find(e => !/\.gov$/i.test(e.split('@')[1] || ''));
+  return nonGov || emails[0];
+}
+
 // Extract the BASIC (Behavior Analysis and Safety Improvement Categories) table from SMS.
 async function extractBasics(page) {
   return await page.evaluate(() => {
@@ -141,7 +168,7 @@ function parseNumber(str) {
 async function safeGoto(page, url, timeoutMs) {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
-    await page.waitForLoadState('networkidle', { timeout: Math.min(timeoutMs, 15000) }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
     return { ok: true, status: 200 };
   } catch (err) {
     return { ok: false, status: 0, error: err.message };
@@ -184,6 +211,13 @@ async function runResearch({ usdot, mc }) {
   };
 
   let snapshotPairs = [];
+  const allEmails = new Set();
+  const harvestEmails = async (page) => {
+    try {
+      const found = await extractEmails(page);
+      found.forEach(e => allEmails.add(e));
+    } catch {}
+  };
 
   try {
     // STEP 1 — Company Snapshot
@@ -207,9 +241,10 @@ async function runResearch({ usdot, mc }) {
       return result;
     }
 
-    await page.waitForSelector('table', { timeout: 15000 }).catch(() => {});
+    await page.waitForSelector('table', { timeout: 6000 }).catch(() => {});
     snapshotPairs = await extractLabelValuePairs(page);
     const links = await extractLinks(page);
+    await harvestEmails(page);
 
     const legalName = getField(snapshotPairs, ['Legal Name', 'Name']);
     const dba = getField(snapshotPairs, ['DBA Name', 'DBA']);
@@ -283,10 +318,11 @@ async function runResearch({ usdot, mc }) {
     if (smsLink) {
       const gotoSms = await safeGoto(page, smsLink.href, 30000);
       if (gotoSms.ok) {
-        await page.waitForSelector('table, .SMS, #ctl00_MainContent_Summary', { timeout: 15000 }).catch(() => {});
+        await page.waitForSelector('table, .SMS, #ctl00_MainContent_Summary', { timeout: 6000 }).catch(() => {});
         const smsPairs = await extractLabelValuePairs(page);
         const smsLinks = await extractLinks(page);
         const basics = await extractBasics(page);
+        await harvestEmails(page);
 
         const vehicles = parseNumber(getField(smsPairs, ['Number of Vehicles', 'Vehicles', 'Power Units']));
         const smsDrivers = parseNumber(getField(smsPairs, ['Number of Drivers', 'Drivers']));
@@ -313,52 +349,53 @@ async function runResearch({ usdot, mc }) {
         };
         stepDone('SMS Overview', 'ok', page.url());
 
-        // STEP 3 — Complete SMS Profile (discover link on the SMS page)
-        const profileLink = findLinkByText(smsLinks, ['Complete SMS Profile', 'Complete Profile', 'SMS Profile']);
+        // Capture all SMS sub-page links once from the overview so we can
+        // navigate to each directly without returning to the overview between
+        // steps (saves several full page loads).
+        const profileLink = findLinkByText(smsLinks, ['Complete SMS Profile', 'Complete Profile', 'SMS Profile', 'Company Safety Profile', 'Safety Profile']);
+        const historyLink = findLinkByText(smsLinks, ['Carrier History', 'History']);
+        const regLink = findLinkByText(smsLinks, ['Carrier Registration Details', 'Registration Details', 'Registration', 'Register']);
+
+        // STEP 3 — Complete SMS Profile / Company Safety Profile (often holds the carrier email)
         if (profileLink) {
           const g = await safeGoto(page, profileLink.href, 30000);
           if (g.ok) {
             const profPairs = await extractLabelValuePairs(page);
+            await harvestEmails(page);
             result.sms_profile = { status: 'ok', source_url: page.url(), retrieval_date: nowIso(), details: profPairs };
             stepDone('Complete SMS Profile', 'ok', page.url());
           } else {
             result.sms_profile = { status: 'error', error_state: 'NETWORK_ERROR', message: g.error };
             stepDone('Complete SMS Profile', 'failed', profileLink.href, { error: g.error });
           }
-          await safeGoto(page, smsLink.href, 30000);
         } else {
           result.sms_profile = { status: 'not_found' };
           stepDone('Complete SMS Profile', 'not_found', null);
         }
 
-        const smsLinks2 = await extractLinks(page);
-
         // STEP 4 — Carrier History
-        const historyLink = findLinkByText(smsLinks2, ['Carrier History', 'History']);
         if (historyLink) {
           const g = await safeGoto(page, historyLink.href, 30000);
           if (g.ok) {
             const hPairs = await extractLabelValuePairs(page);
+            await harvestEmails(page);
             result.carrier_history = { status: 'ok', source_url: page.url(), retrieval_date: nowIso(), details: hPairs };
             stepDone('Carrier History', 'ok', page.url());
           } else {
             result.carrier_history = { status: 'error', error_state: 'NETWORK_ERROR', message: g.error };
             stepDone('Carrier History', 'failed', historyLink.href, { error: g.error });
           }
-          await safeGoto(page, smsLink.href, 30000);
         } else {
           result.carrier_history = { status: 'not_found' };
           stepDone('Carrier History', 'not_found', null);
         }
 
-        const smsLinks3 = await extractLinks(page);
-
-        // STEP 5 — Carrier Registration Details
-        const regLink = findLinkByText(smsLinks3, ['Carrier Registration Details', 'Registration Details', 'Registration']);
+        // STEP 5 — Carrier Registration Details (same MC number)
         if (regLink) {
           const g = await safeGoto(page, regLink.href, 30000);
           if (g.ok) {
             const regPairs = await extractLabelValuePairs(page);
+            await harvestEmails(page);
             result.registration = { status: 'ok', source_url: page.url(), retrieval_date: nowIso(), details: regPairs };
             stepDone('Carrier Registration Details', 'ok', page.url());
           } else {
@@ -378,60 +415,69 @@ async function runResearch({ usdot, mc }) {
       stepDone('SMS Overview', 'not_found', null);
     }
 
-    // Return to Company Snapshot for the remaining carrier-specific links
-    await safeGoto(page, snapshotUrl, 30000);
-    const snapLinks2 = await extractLinks(page);
+    // The carrier-specific links were already discovered on the Company
+    // Snapshot, so we navigate to each directly — no need to re-load the
+    // snapshot between steps (saves several full page loads).
 
-    // STEP 6 — Licensing & Insurance
-    const insLink = insuranceLink || findLinkByText(snapLinks2, ['Licensing & Insurance', 'Insurance']);
-    if (insLink) {
-      const g = await safeGoto(page, insLink.href, 30000);
+    // STEP 6 — Licensing & Insurance (also a source of registration/authority + email)
+    if (insuranceLink) {
+      const g = await safeGoto(page, insuranceLink.href, 30000);
       if (g.ok) {
-        await page.waitForSelector('table', { timeout: 15000 }).catch(() => {});
+        await page.waitForSelector('table', { timeout: 6000 }).catch(() => {});
         const insPairs = await extractLabelValuePairs(page);
         const insLinks = await extractLinks(page);
+        await harvestEmails(page);
         result.insurance = {
           status: 'ok', source_url: page.url(), retrieval_date: nowIso(),
           details: insPairs,
           links: insLinks.map(l => ({ text: l.text, href: l.href })),
         };
         stepDone('Licensing & Insurance', 'ok', page.url());
+
+        // Fallback: if registration wasn't found on the SMS page, the L&I page
+        // for this carrier often links to the operating-authority / registration
+        // record for the same MC number.
+        if (result.registration.status !== 'ok') {
+          const liRegLink = findLinkByText(insLinks, ['Registration', 'Operating Authority', 'Authority', 'Docket']);
+          if (liRegLink) {
+            const rg = await safeGoto(page, liRegLink.href, 30000);
+            if (rg.ok) {
+              const regPairs = await extractLabelValuePairs(page);
+              await harvestEmails(page);
+              result.registration = { status: 'ok', source_url: page.url(), retrieval_date: nowIso(), details: regPairs };
+              stepDone('Carrier Registration Details', 'ok', page.url());
+            }
+          }
+        }
       } else {
         result.insurance = { status: 'error', error_state: 'NETWORK_ERROR', message: g.error };
-        stepDone('Licensing & Insurance', 'failed', insLink.href, { error: g.error });
+        stepDone('Licensing & Insurance', 'failed', insuranceLink.href, { error: g.error });
       }
     } else {
       result.insurance = { status: 'not_found' };
       stepDone('Licensing & Insurance', 'not_found', null);
     }
 
-    await safeGoto(page, snapshotUrl, 30000);
-    const snapLinks3 = await extractLinks(page);
-
     // STEP 7 — Inspections/Crashes
-    const inspLink = inspectionsLink || findLinkByText(snapLinks3, ['Inspections/Crashes', 'Inspections', 'Crashes']);
-    if (inspLink) {
-      const g = await safeGoto(page, inspLink.href, 30000);
+    if (inspectionsLink) {
+      const g = await safeGoto(page, inspectionsLink.href, 30000);
       if (g.ok) {
         const inspPairs = await extractLabelValuePairs(page);
+        await harvestEmails(page);
         result.inspection_crash = { status: 'ok', source_url: page.url(), retrieval_date: nowIso(), details: inspPairs };
         stepDone('Inspections/Crashes', 'ok', page.url());
       } else {
         result.inspection_crash = { status: 'error', error_state: 'NETWORK_ERROR', message: g.error };
-        stepDone('Inspections/Crashes', 'failed', inspLink.href, { error: g.error });
+        stepDone('Inspections/Crashes', 'failed', inspectionsLink.href, { error: g.error });
       }
     } else {
       result.inspection_crash = { status: 'not_found' };
       stepDone('Inspections/Crashes', 'not_found', null);
     }
 
-    await safeGoto(page, snapshotUrl, 30000);
-    const snapLinks4 = await extractLinks(page);
-
     // STEP 8 — Safety Rating
-    const srLink = safetyRatingLink || findLinkByText(snapLinks4, ['Safety Rating']);
-    if (srLink) {
-      const g = await safeGoto(page, srLink.href, 30000);
+    if (safetyRatingLink) {
+      const g = await safeGoto(page, safetyRatingLink.href, 30000);
       if (g.ok) {
         const srPairs = await extractLabelValuePairs(page);
         const rating = getField(srPairs, ['Rating', 'Safety Rating']);
@@ -440,7 +486,7 @@ async function runResearch({ usdot, mc }) {
         stepDone('Safety Rating', 'ok', page.url());
       } else {
         result.safety_rating = { status: 'error', error_state: 'NETWORK_ERROR', message: g.error };
-        stepDone('Safety Rating', 'failed', srLink.href, { error: g.error });
+        stepDone('Safety Rating', 'failed', safetyRatingLink.href, { error: g.error });
       }
     } else {
       // Safety rating may be displayed directly on the Company Snapshot
@@ -449,16 +495,23 @@ async function runResearch({ usdot, mc }) {
       stepDone('Safety Rating', rating ? 'ok' : 'not_found', snapshotUrl);
     }
 
-    // STEP 9 — Contact extraction (separate fields, each with source/confidence/date)
+    // STEP 9 — Contact extraction. Email is harvested across every page
+    // visited (snapshot, SMS profile/record, registration, L&I) because SAFER
+    // rarely lists it directly — it usually lives on the SMS record/profile
+    // page or the carrier registration page for the same MC number.
+    const snapshotEmail = getField(snapshotPairs, ['Email', 'E-Mail']);
+    const harvested = Array.from(allEmails);
+    const bestEmail = pickEmail(harvested) || snapshotEmail;
     result.contacts = {
       owner_name: getField(snapshotPairs, ['Owner Name', 'Owner', 'Contact Name']),
       contact_name: getField(snapshotPairs, ['Contact Name', 'Contact']),
       contact_title: getField(snapshotPairs, ['Contact Title', 'Title']),
-      email: getField(snapshotPairs, ['Email', 'E-Mail']),
+      email: bestEmail,
+      emails_found: harvested,
       fax: fax,
       phone: phone,
       source_url: snapshotUrl,
-      confidence: 'High',
+      confidence: bestEmail ? 'High' : 'Low',
       retrieval_date: nowIso(),
     };
   } catch (err) {
