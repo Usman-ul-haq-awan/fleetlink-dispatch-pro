@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -121,6 +122,8 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      <ResearchCriteriaChart />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quick Actions */}
