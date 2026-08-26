@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw } from "lucide-react";
+import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 const STATUS_COLORS = {
   "Imported": "bg-slate-100 text-slate-700",
@@ -39,7 +40,15 @@ export default function CarrierDatabase() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [researching, setResearching] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [searchParams] = useSearchParams();
   const PAGE_SIZE = 50;
+
+  // Apply a safety filter passed via the URL (e.g. ?safety=Qualified) on first load.
+  useEffect(() => {
+    const safety = searchParams.get("safety");
+    if (safety) setSafetyFilter(safety);
+  }, [searchParams]);
 
   const loadCarriers = useCallback(async (reset = false) => {
     setLoading(true);
@@ -83,6 +92,43 @@ export default function CarrierDatabase() {
     }
   };
 
+  const exportToExcel = () => {
+    if (carriers.length === 0) return;
+    setExporting(true);
+    try {
+      const rows = carriers.map(c => ({
+        "Legal Name": c.legal_name || "",
+        "DBA Name": c.dba_name || "",
+        "USDOT": c.usdot_number || "",
+        "MC": c.mc_number || "",
+        "MX": c.mx_number || "",
+        "Operating Status": c.operating_status || "",
+        "State": c.state || "",
+        "City": c.city || "",
+        "Phone": c.phone || "",
+        "Email": c.email || "",
+        "Owner": c.owner_name || "",
+        "Power Units": c.power_units ?? "",
+        "Drivers": c.drivers ?? "",
+        "Equipment": c.equipment_types || "",
+        "Cargo Types": c.cargo_types || "",
+        "Safety Qualification": c.safety_qualification || "",
+        "Safety Rating": c.safety_rating || "",
+        "Lead Score": c.lead_score ?? "",
+        "Lead Status": c.lead_status || "",
+        "Last Researched": c.last_researched_at || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Carriers");
+      const suffix = safetyFilter ? `_${safetyFilter.replace(/\s+/g, "_")}` : "";
+      XLSX.writeFile(wb, `carriers${suffix}_${Date.now()}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const states = [...new Set(carriers.map(c => c.state).filter(Boolean))].sort();
 
   return (
@@ -92,9 +138,16 @@ export default function CarrierDatabase() {
           <h1 className="text-2xl font-bold text-slate-900">Carrier Database</h1>
           <p className="text-slate-500 text-sm mt-1">{carriers.length} carriers</p>
         </div>
-        <Link to="/import-export" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-          Import Carriers
-        </Link>
+        <div className="flex items-center gap-2">
+          <button onClick={exportToExcel} disabled={exporting || carriers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            Export to Excel
+          </button>
+          <Link to="/import-export" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+            Import Carriers
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

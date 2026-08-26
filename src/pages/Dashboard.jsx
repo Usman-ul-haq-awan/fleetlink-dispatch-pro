@@ -64,7 +64,7 @@ export default function Dashboard() {
     { label: "Total Carriers", value: stats.total, icon: Truck, color: "blue", to: "/carriers" },
     { label: "Researched", value: stats.researched, icon: Search, color: "indigo" },
     { label: "Research Failures", value: stats.failed, icon: AlertCircle, color: "red" },
-    { label: "Qualified", value: stats.qualified, icon: CheckCircle, color: "green" },
+    { label: "Qualified", value: stats.qualified, icon: CheckCircle, color: "green", to: "/carriers?safety=Qualified" },
     { label: "Review Required", value: stats.reviewRequired, icon: Clock, color: "amber" },
     { label: "High Risk", value: stats.highRisk, icon: AlertCircle, color: "red" },
     { label: "Ready for Outreach", value: stats.readyForOutreach, icon: Mail, color: "blue" },
