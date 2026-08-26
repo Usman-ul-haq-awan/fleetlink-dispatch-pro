@@ -1,25 +1,22 @@
 import { secrets } from "base44:runtime";
 
-// Shared email sender. Routes outbound email through the dedicated email
-// worker, which forwards to Resend's HTTPS API (port 443 — works on any host,
-// no SMTP egress required).
+// Direct Resend integration — no external worker required.
+// Calls Resend's HTTPS API (port 443) directly from the Base44 backend.
 //
-// Requires the EMAIL_WORKER_URL and EMAIL_WORKER_API_KEY app secrets, plus a
-// Resend-verified sender identity. The sender identity (from_email / from_name)
-// is read from AppSetting (setting_category: "smtp") so it stays configurable
-// in Settings → SMTP Email Server; the SMTP host/port/username/password fields
-// are no longer used for sending.
+// Requires the RESEND_API_KEY app secret, plus a Resend-verified sender
+// identity. The sender identity (from_email / from_name) is read from
+// AppSetting (setting_category: "smtp") so it stays configurable in
+// Settings → SMTP Email Server.
 export async function sendEmail(
   base44: any,
   opts: { to: string; subject: string; body: string; fromName?: string; requireSmtp?: boolean }
 ): Promise<{ provider: string; messageId?: string }> {
   const { to, subject, body, fromName } = opts;
 
-  const workerUrl = secrets.get("EMAIL_WORKER_URL");
-  const workerKey = secrets.get("EMAIL_WORKER_API_KEY");
-  if (!workerUrl) {
+  const apiKey = secrets.get("RESEND_API_KEY");
+  if (!apiKey) {
     throw new Error(
-      "EMAIL_WORKER_URL secret is not configured. Deploy the email worker and add its URL + API key as app secrets (EMAIL_WORKER_URL, EMAIL_WORKER_API_KEY)."
+      "RESEND_API_KEY secret is not configured. Add your Resend API key in the app secrets."
     );
   }
 
@@ -35,11 +32,11 @@ export async function sendEmail(
   }
   const fromAddr = `${fromNameResolved} <${fromEmail}>`;
 
-  const res = await fetch(`${workerUrl.replace(/\/$/, "")}/send-email`, {
+  const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "x-worker-api-key": workerKey || "",
     },
     body: JSON.stringify({
       from: fromAddr,
@@ -49,11 +46,12 @@ export async function sendEmail(
     }),
   });
 
+  const data: any = await res.json().catch(() => ({}));
+
   if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error((errData as any).error || (errData as any).message || `Email worker returned ${res.status}`);
+    const msg = data?.message || data?.error || `Resend API returned ${res.status}`;
+    throw new Error(`Resend error: ${msg}`);
   }
 
-  const data: any = await res.json();
-  return { provider: "resend", messageId: data.id || data.messageId };
+  return { provider: "resend", messageId: data.id };
 }
