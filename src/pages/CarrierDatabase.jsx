@@ -186,7 +186,7 @@ export default function CarrierDatabase() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-x-auto">
+      <div className="bg-white rounded-lg border border-slate-200 overflow-auto max-h-[70vh]">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -202,7 +202,7 @@ export default function CarrierDatabase() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">USDOT</th>
