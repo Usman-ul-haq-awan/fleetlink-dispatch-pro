@@ -159,18 +159,37 @@ export default function ImportExport() {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = async (format) => {
     setExporting(true);
     try {
       const res = await base44.functions.invoke("exportCarriers", {});
       const csv = res.data.csv;
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = res.data.filename || "carriers_export.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      const baseName = (res.data.filename || "carriers_export.csv").replace(/\.csv$/, "");
+      const parsed = parseCSV(csv);
+      const allRows = [parsed.headers, ...parsed.rows.map(r => parsed.headers.map(h => r[h] ?? ""))];
+
+      if (format === "excel") {
+        const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const tableRows = allRows
+          .map((row, i) => `<tr>${row.map(c => `<td${i === 0 ? ' style="font-weight:bold;background:#f1f5f9"' : ""}>${esc(c)}</td>`).join("")}</tr>`)
+          .join("");
+        const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><table>${tableRows}</table></body></html>`;
+        const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.xls`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
       alert("Export failed: " + (err.response?.data?.error || err.message));
     } finally {
@@ -301,11 +320,18 @@ export default function ImportExport() {
           <h2 className="font-semibold text-slate-900 mb-2">Export Carrier Database</h2>
           <p className="text-sm text-slate-500 mb-4">Download all carrier data as a CSV file with separate columns for every field.</p>
           <p className="text-xs text-slate-400 mb-4">Includes: Carrier Name, DBA, USDOT, MC, MX, Status, Address, Phone, Fax, Email, Owner, Contact, Power Units, Drivers, Cargo, Equipment, Safety Qualification, Lead Score, Source URLs, and more.</p>
-          <button onClick={handleExport} disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 mx-auto">
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {exporting ? "Exporting..." : "Export to CSV"}
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={() => handleExport("csv")} disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 disabled:opacity-50">
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Export to CSV
+            </button>
+            <button onClick={() => handleExport("excel")} disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              Export to Excel
+            </button>
+          </div>
         </div>
       )}
     </div>
