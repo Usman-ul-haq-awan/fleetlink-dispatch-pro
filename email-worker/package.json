@@ -1,0 +1,16 @@
+{
+  "name": "fleetlink-email-worker",
+  "version": "1.0.0",
+  "description": "Dedicated email worker for FleetLink Dispatch Pro — forwards outbound email to Resend's HTTPS API.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
