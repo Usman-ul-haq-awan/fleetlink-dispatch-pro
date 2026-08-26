@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck } from "lucide-react";
+import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2 } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
@@ -16,6 +16,44 @@ export default function CarrierResearch() {
   const [discovering, setDiscovering] = useState(false);
   const [discoverTarget, setDiscoverTarget] = useState(200);
   const stopRef = useRef(false);
+  const [failedMcs, setFailedMcs] = useState([]);
+
+  const buildFailureReason = (data, err) => {
+    if (err) {
+      return { reason: "Exception", detail: err.response?.data?.error || err.message || "Request failed" };
+    }
+    if (!data) return { reason: "No Response", detail: "No response from research worker" };
+    if (data.success && data.carrier && !data.carrier.legal_name) {
+      return { reason: "No Carrier Found", detail: "FMCSA SAFER returned no real carrier for this MC number (no legal name present on the snapshot)." };
+    }
+    if (!data.success) {
+      const topErr = data.error || "Research Failed";
+      const stepFails = (data.steps || []).filter(s => s.status === "failed").map(s => `${s.name}: ${s.error || s.status}`).join("; ");
+      const workerErrs = (data.errors || []).map(e => `${e.step || e.state || "Worker"}: ${e.message || e.state || ""}`).join("; ");
+      const detail = [stepFails, workerErrs].filter(Boolean).join(" | ") || topErr;
+      return { reason: topErr, detail };
+    }
+    return { reason: "Unknown", detail: "Unrecognized response from research worker" };
+  };
+
+  const recordFailure = (mcLabel, data, err) => {
+    const f = buildFailureReason(data, err);
+    setFailedMcs(prev => [{ mc: mcLabel, reason: f.reason, detail: f.detail, timestamp: new Date().toISOString() }, ...prev]);
+  };
+
+  const exportFailedMcs = () => {
+    if (failedMcs.length === 0) return;
+    const headers = ["MC Number", "Reason", "Detail", "Timestamp"];
+    const rows = failedMcs.map(f => [f.mc, f.reason, f.detail, f.timestamp]);
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `failed_mc_report_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,10 +95,12 @@ export default function CarrierResearch() {
           errors: data.errors || (data.error ? [data.error] : []),
         } : prev
       );
+      if (!data.success && carrier.mc_number) recordFailure(`MC-${carrier.mc_number}`, data);
       return data;
     } catch (err) {
       const msg = err.response?.data?.error || err.message;
       setActiveResearch((prev) => (prev ? { ...prev, status: "error", errors: [msg] } : prev));
+      if (carrier.mc_number) recordFailure(`MC-${carrier.mc_number}`, null, err);
       return { success: false, error: msg };
     }
   };
@@ -178,9 +218,11 @@ export default function CarrierResearch() {
             if (data.carrier_id) {
               try { await base44.entities.Carrier.delete(data.carrier_id); } catch {}
             }
+            recordFailure(`MC-${currentMc}`, data);
             setProgress(p => ({ ...p, failed: p.failed + 1 }));
           }
         } catch (err) {
+          recordFailure(`MC-${currentMc}`, null, err);
           setProgress(p => ({ ...p, failed: p.failed + 1 }));
         }
         await load();
@@ -287,6 +329,46 @@ export default function CarrierResearch() {
                 {err.source_url && <a href={err.source_url} target="_blank" rel="noopener noreferrer" className="ml-2 underline">Source</a>}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {failedMcs.length > 0 && (
+        <div className="bg-white rounded-lg border border-amber-200 overflow-hidden mb-4">
+          <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <h3 className="font-medium text-amber-800 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> Failed MC Report ({failedMcs.length})
+            </h3>
+            <div className="flex items-center gap-2">
+              <button onClick={exportFailedMcs} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md">
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+              <button onClick={() => setFailedMcs([])} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md">
+                <Trash2 className="w-3.5 h-3.5" /> Clear
+              </button>
+            </div>
+          </div>
+          <div className="overflow-auto max-h-80">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">MC Number</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Reason</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Detail</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {failedMcs.map((f, i) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 font-mono text-slate-900 whitespace-nowrap">{f.mc}</td>
+                    <td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 whitespace-nowrap">{f.reason}</span></td>
+                    <td className="px-4 py-2 text-xs text-slate-600">{f.detail}</td>
+                    <td className="px-4 py-2 text-xs text-slate-500 whitespace-nowrap">{new Date(f.timestamp).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
