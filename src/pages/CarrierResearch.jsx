@@ -32,16 +32,6 @@ export default function CarrierResearch() {
     return unsub;
   }, []);
 
-  const prevAuditRunning = useRef(false);
-  useEffect(() => {
-    const unsub = subscribeAudit((snap) => {
-      setAudit(snap);
-      if (prevAuditRunning.current && !snap.running) load();
-      prevAuditRunning.current = snap.running;
-    });
-    return unsub;
-  }, [load]);
-
   const buildFailureReason = (data, err) => {
     if (err) {
       return { reason: "Exception", detail: err.response?.data?.error || err.message || "Request failed" };
@@ -98,6 +88,16 @@ export default function CarrierResearch() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const prevAuditRunning = useRef(false);
+  useEffect(() => {
+    const unsub = subscribeAudit((snap) => {
+      setAudit(snap);
+      if (prevAuditRunning.current && !snap.running) load();
+      prevAuditRunning.current = snap.running;
+    });
+    return unsub;
+  }, [load]);
 
   const processOne = async (carrier) => {
     setActiveResearch({
