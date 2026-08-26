@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 function parseCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -169,18 +170,14 @@ export default function ImportExport() {
       const allRows = [parsed.headers, ...parsed.rows.map(r => parsed.headers.map(h => r[h] ?? ""))];
 
       if (format === "excel") {
-        const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const tableRows = allRows
-          .map((row, i) => `<tr>${row.map(c => `<td${i === 0 ? ' style="font-weight:bold;background:#f1f5f9"' : ""}>${esc(c)}</td>`).join("")}</tr>`)
-          .join("");
-        const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><table>${tableRows}</table></body></html>`;
-        const blob = new Blob([html], { type: "application/vnd.ms-excel" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${baseName}.xls`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const ws = XLSX.utils.aoa_to_sheet(allRows);
+        ws["!cols"] = parsed.headers.map((h, i) => {
+          const maxLen = Math.max(String(h).length, ...allRows.slice(1).map(r => String(r[i] ?? "").length));
+          return { wch: Math.min(Math.max(maxLen + 2, 12), 50) };
+        });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Carriers");
+        XLSX.writeFile(wb, `${baseName}.xlsx`);
       } else {
         const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
