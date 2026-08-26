@@ -30,6 +30,10 @@ export async function sendEmail(
 
   const fromEmail = map.smtp_from_email || "";
   const fromNameResolved = map.smtp_from_name || fromName || "Dispatch Team";
+  if (!fromEmail) {
+    throw new Error("Sender email not configured. Set smtp_from_email in Settings → SMTP Email Server to a Resend-verified address.");
+  }
+  const fromAddr = `${fromNameResolved} <${fromEmail}>`;
 
   const res = await fetch(`${workerUrl.replace(/\/$/, "")}/send-email`, {
     method: "POST",
@@ -38,19 +42,18 @@ export async function sendEmail(
       "x-worker-api-key": workerKey || "",
     },
     body: JSON.stringify({
-      to,
+      from: fromAddr,
+      to: [to],
       subject,
-      body,
-      from_email: fromEmail,
-      from_name: fromNameResolved,
+      text: body || "",
     }),
   });
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error((errData as any).error || `Email worker returned ${res.status}`);
+    throw new Error((errData as any).error || (errData as any).message || `Email worker returned ${res.status}`);
   }
 
   const data: any = await res.json();
-  return { provider: "resend", messageId: data.messageId };
+  return { provider: "resend", messageId: data.id || data.messageId };
 }
