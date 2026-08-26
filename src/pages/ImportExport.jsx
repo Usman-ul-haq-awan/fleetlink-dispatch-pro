@@ -76,14 +76,32 @@ export default function ImportExport() {
 
   const handleFile = async (file) => {
     setFileName(file.name);
-    const text = await file.text();
-    const parsed = parseCSV(text);
-    setParsedData(parsed);
+    setImportResult(null);
 
+    let parsed;
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+    if (isExcel) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      if (aoa.length === 0) { setParsedData({ headers: [], rows: [] }); return; }
+      const headers = aoa[0].map(h => String(h).trim());
+      const rows = aoa.slice(1).map(r => {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = String(r[i] ?? "").trim(); });
+        return obj;
+      });
+      parsed = { headers, rows };
+    } else {
+      const text = await file.text();
+      parsed = parseCSV(text);
+    }
+
+    setParsedData(parsed);
     const autoMap = {};
     parsed.headers.forEach(h => { autoMap[h] = autoDetectColumn(h); });
     setColumnMap(autoMap);
-    setImportResult(null);
   };
 
   const handleImport = async () => {
@@ -214,11 +232,11 @@ export default function ImportExport() {
           {!parsedData && !importResult && (
             <div className="bg-white rounded-lg border-2 border-dashed border-slate-300 p-12 text-center">
               <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-600 mb-2">Upload a CSV file with carrier data</p>
-              <p className="text-xs text-slate-400 mb-4">Supports columns: USDOT, MC, Company Name, Phone, Email, State, Equipment</p>
-              <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+              <p className="text-slate-600 mb-2">Upload a CSV or Excel file with carrier data</p>
+              <p className="text-xs text-slate-400 mb-4">Supports .csv, .xlsx, .xls — columns: USDOT, MC, Company Name, Phone, Email, State, Equipment</p>
+              <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = ""; }} />
               <button onClick={() => fileRef.current?.click()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-                Select CSV File
+                Select File
               </button>
             </div>
           )}
