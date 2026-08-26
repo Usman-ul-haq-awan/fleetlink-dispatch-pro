@@ -15,6 +15,7 @@ export default function CarrierResearch() {
   const [activeResearch, setActiveResearch] = useState(null);
   const [autoRunning, setAutoRunning] = useState(false);
   const [discoverTarget, setDiscoverTarget] = useState(200);
+  const [discoverStartMc, setDiscoverStartMc] = useState("");
   const stopRef = useRef(false);
   const [failedMcs, setFailedMcs] = useState([]);
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
@@ -196,6 +197,11 @@ export default function CarrierResearch() {
   // MC-number discovery runs in a module-level background runner so it keeps
   // working even when the user navigates away from this page.
   const startDiscovery = () => startRunnerDiscovery(discoverTarget);
+  const startDiscoveryFromMc = () => {
+    const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
+    if (!mc || isNaN(mc)) return;
+    startRunnerDiscovery(discoverTarget, mc);
+  };
   const stopDiscovery = () => stopRunnerDiscovery();
 
   return (
@@ -258,6 +264,21 @@ export default function CarrierResearch() {
               </button>
             )}
           </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap pt-3 mt-3 border-t border-slate-200">
+          <label className="text-xs text-slate-500">Start from MC</label>
+          <input type="number" min="1" value={discoverStartMc}
+            onChange={e => setDiscoverStartMc(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !discovery.running) startDiscoveryFromMc(); }}
+            placeholder="e.g. 1500000"
+            disabled={discovery.running}
+            className="w-36 px-2 py-1.5 text-sm border border-slate-300 rounded-md disabled:opacity-50" />
+          <button onClick={startDiscoveryFromMc} disabled={discovery.running || !discoverStartMc}
+            className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50">
+            <Play className="w-4 h-4" />
+            Research from MC
+          </button>
+          <p className="text-xs text-slate-400 w-full">Starts at the MC number you enter and continues +1 until the target count is reached.</p>
         </div>
       </div>
 

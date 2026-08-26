@@ -81,7 +81,7 @@ export function stopDiscovery() {
   patchProgress({ current: "Stopping after current MC..." });
 }
 
-export async function startDiscovery(target) {
+export async function startDiscovery(target, startMc) {
   if (state.running) return;
   stopRequested = false;
   const targetCount = Math.max(1, target || state.target);
@@ -94,7 +94,9 @@ export async function startDiscovery(target) {
       const num = parseInt(String(c.mc_number || "").replace(/[^0-9]/g, ""), 10);
       if (!isNaN(num) && num > maxMc) maxMc = num;
     });
-    let currentMc = maxMc;
+    // If a starting MC is provided, begin one below it so the loop's first
+    // increment lands exactly on the requested number (follows the +1 rule).
+    let currentMc = startMc ? Math.max(0, startMc - 1) : maxMc;
     patchProgress({ total: targetCount, done: found, failed: 0, current: `Discovering from MC-${currentMc + 1} · ${found}/${targetCount} found` });
 
     while (!stopRequested && found < targetCount) {
