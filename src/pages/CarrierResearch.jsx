@@ -4,6 +4,7 @@ import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Downl
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 import ResearchStepsSelector, { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
+import { subscribe as subscribeAudit, startAudit as startRunnerAudit, stopAudit as stopRunnerAudit } from "@/lib/auditRunner";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
 
@@ -21,8 +22,7 @@ export default function CarrierResearch() {
   const stopRef = useRef(false);
   const [failedMcs, setFailedMcs] = useState([]);
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
-  const [auditing, setAuditing] = useState(false);
-  const [auditResult, setAuditResult] = useState(null);
+  const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -31,6 +31,16 @@ export default function CarrierResearch() {
     });
     return unsub;
   }, []);
+
+  const prevAuditRunning = useRef(false);
+  useEffect(() => {
+    const unsub = subscribeAudit((snap) => {
+      setAudit(snap);
+      if (prevAuditRunning.current && !snap.running) load();
+      prevAuditRunning.current = snap.running;
+    });
+    return unsub;
+  }, [load]);
 
   const buildFailureReason = (data, err) => {
     if (err) {
@@ -212,45 +222,8 @@ export default function CarrierResearch() {
   };
   const stopDiscovery = () => stopRunnerDiscovery();
 
-  const runAudit = async () => {
-    setAuditing(true);
-    setAuditResult(null);
-    try {
-      let remaining = 1;
-      let totalRemoved = 0;
-      let totalKept = 0;
-      let totalWorkerChecks = 0;
-      let allRemoved = [];
-      let rounds = 0;
-      while (remaining > 0 && rounds < 30) {
-        rounds++;
-        const res = await base44.functions.invoke("auditAuthorizedStatus", { max_worker_checks: 10, max_deletions: 10 });
-        const d = res.data;
-        totalRemoved += d.removed || 0;
-        totalKept += d.kept || 0;
-        totalWorkerChecks += d.checked_from_worker || 0;
-        allRemoved = [...allRemoved, ...(d.removed_carriers || [])];
-        remaining = d.remaining_unchecked || 0;
-        setAuditResult({
-          removed: totalRemoved,
-          kept: totalKept,
-          worker_checks: totalWorkerChecks,
-          stored_checks: d.checked_from_stored || 0,
-          remaining,
-          removed_carriers: allRemoved,
-          current: remaining > 0 ? `Round ${rounds}: ${d.removed} removed, ${remaining} still unchecked…` : "Audit complete",
-        });
-        if (remaining > 0) await new Promise(r => setTimeout(r, 1500));
-      }
-      setAuditResult(prev => ({ ...prev, current: "Audit complete", remaining: 0 }));
-      load();
-    } catch (err) {
-      const msg = err.response?.data?.error || err.message;
-      setAuditResult(prev => ({ ...prev, current: `Audit error: ${msg}` }));
-    } finally {
-      setAuditing(false);
-    }
-  };
+  const runAudit = () => startRunnerAudit();
+  const stopAudit = () => stopRunnerAudit();
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -344,31 +317,42 @@ export default function CarrierResearch() {
               Unauthorized carriers are removed from the database.
             </p>
           </div>
-          <button onClick={runAudit} disabled={auditing || processing}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
-            {auditing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-            {auditing ? "Auditing…" : "Audit Database"}
-          </button>
+          {!audit.running ? (
+            <button onClick={runAudit} disabled={processing}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+              <ShieldCheck className="w-4 h-4" />
+              Audit Database
+            </button>
+          ) : (
+            <button onClick={stopAudit}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
+              <AlertCircle className="w-4 h-4" />
+              Stop Audit
+            </button>
+          )}
         </div>
-        {auditResult && (
+        {(audit.running || audit.progress.current || audit.removedCarriers.length > 0) && (
           <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-slate-600 mb-2">{auditResult.current}</p>
+            <p className="text-xs text-slate-600 mb-2 flex items-center gap-1.5">
+              {audit.running && <Loader2 className="w-3 h-3 animate-spin text-violet-600" />}
+              {audit.progress.current || "Idle"}
+            </p>
             <div className="flex gap-4 flex-wrap text-xs">
-              <span className="text-green-700">Kept: {auditResult.kept}</span>
-              <span className="text-red-700">Removed: {auditResult.removed}</span>
-              <span className="text-slate-500">Worker checks: {auditResult.worker_checks}</span>
-              {auditResult.remaining > 0 && <span className="text-amber-600">Remaining: {auditResult.remaining}</span>}
+              <span className="text-green-700">Kept: {audit.progress.kept}</span>
+              <span className="text-red-700">Removed: {audit.progress.removed}</span>
+              <span className="text-slate-500">Worker checks: {audit.progress.workerChecks}</span>
+              {audit.progress.remaining > 0 && <span className="text-amber-600">Remaining: {audit.progress.remaining}</span>}
             </div>
-            {auditResult.removed_carriers?.length > 0 && (
+            {audit.removedCarriers.length > 0 && (
               <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
-                {auditResult.removed_carriers.slice(0, 20).map((c, i) => (
+                {audit.removedCarriers.slice(0, 20).map((c, i) => (
                   <div key={i} className="text-xs text-slate-500">
-                    <span className="font-medium text-slate-700">{c.legal_name || c.usdot || c.mc || c.id}</span>
-                    <span className="text-red-500 ml-2">— {c.operating_status || "NOT AUTHORIZED"}</span>
+                    <span className="font-medium text-slate-700">{c.legal_name}</span>
+                    <span className="text-red-500 ml-2">— {c.operating_status}</span>
                   </div>
                 ))}
-                {auditResult.removed_carriers.length > 20 && (
-                  <p className="text-xs text-slate-400">…and {auditResult.removed_carriers.length - 20} more</p>
+                {audit.removedCarriers.length > 20 && (
+                  <p className="text-xs text-slate-400">…and {audit.removedCarriers.length - 20} more</p>
                 )}
               </div>
             )}
