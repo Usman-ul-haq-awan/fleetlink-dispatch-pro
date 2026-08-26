@@ -37,8 +37,42 @@ export default async function(req: Request): Promise<Response> {
     let workerCallsUsed = 0;
     const removedCarriers: any[] = [];
 
+    // Returns true when the worker response indicates FMCSA has no real
+    // carrier for this USDOT/MC (no legal name, no operating status, or
+    // identity mismatch). These dummy/invalid records should be removed.
+    const isCarrierNotFound = (data: any): boolean => {
+      if (!data) return false;
+      if (data.identity_verified === false) return true;
+      const legalName = data?.carrier?.legal_name || "";
+      const liveStatus = data?.safer?.operating_status || data?.operation_status?.operating_status || "";
+      return !legalName && !liveStatus;
+    };
+
     for (const carrier of carriers) {
       if (removedCount >= maxDeletions && workerCallsUsed >= maxWorkerChecks) break;
+
+      // A carrier with no USDOT and no MC cannot ever be verified against
+      // FMCSA — remove it immediately (dummy/test records fall here).
+      if (!carrier.usdot_number && !carrier.mc_number) {
+        if (removedCount >= maxDeletions) continue;
+        await deleteCarrierAndRelated(base44, carrier.id);
+        removedCount++;
+        removedCarriers.push({
+          id: carrier.id,
+          legal_name: carrier.legal_name || "",
+          usdot: "",
+          mc: "",
+          operating_status: "NO USDOT/MC — unverifiable",
+        });
+        await base44.entities.ActivityLog.create({
+          action: "Carrier removed by authority audit (no USDOT/MC)",
+          details: `${carrier.legal_name || carrier.id}: has no USDOT or MC number`,
+          status: "Warning",
+          timestamp: now,
+        });
+        checkedFromStored++;
+        continue;
+      }
 
       const opStatus = (carrier.operating_status || "").trim();
 
@@ -91,7 +125,7 @@ export default async function(req: Request): Promise<Response> {
             const data: any = await workerRes.json();
             checkedFromWorker++;
             const liveStatus = data?.safer?.operating_status || data?.operation_status?.operating_status || "";
-            if (isExplicitlyUnauthorized(liveStatus)) {
+            if (isExplicitlyUnauthorized(liveStatus) || isCarrierNotFound(data)) {
               if (removedCount >= maxDeletions) continue;
               await deleteCarrierAndRelated(base44, carrier.id);
               removedCount++;
@@ -100,11 +134,11 @@ export default async function(req: Request): Promise<Response> {
                 legal_name: carrier.legal_name || data?.carrier?.legal_name || "",
                 usdot: carrier.usdot_number || "",
                 mc: carrier.mc_number || "",
-                operating_status: liveStatus,
+                operating_status: liveStatus || "NOT FOUND ON FMCSA",
               });
               await base44.entities.ActivityLog.create({
                 action: "Carrier removed by authority audit (worker re-check)",
-                details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus}`,
+                details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus || "not found"}`,
                 status: "Warning",
                 timestamp: now,
               });
@@ -140,7 +174,7 @@ export default async function(req: Request): Promise<Response> {
           checkedFromWorker++;
 
           const liveStatus = data?.safer?.operating_status || data?.operation_status?.operating_status || "";
-          if (isExplicitlyUnauthorized(liveStatus)) {
+          if (isExplicitlyUnauthorized(liveStatus) || isCarrierNotFound(data)) {
             await deleteCarrierAndRelated(base44, carrier.id);
             removedCount++;
             removedCarriers.push({
@@ -148,11 +182,11 @@ export default async function(req: Request): Promise<Response> {
               legal_name: carrier.legal_name || data?.carrier?.legal_name || "",
               usdot: carrier.usdot_number || "",
               mc: carrier.mc_number || "",
-              operating_status: liveStatus,
+              operating_status: liveStatus || "NOT FOUND ON FMCSA",
             });
             await base44.entities.ActivityLog.create({
               action: "Carrier removed by authority audit (worker check)",
-              details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus}`,
+              details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus || "not found"}`,
               status: "Warning",
               timestamp: now,
             });
