@@ -90,11 +90,15 @@ export default function CarrierResearch() {
   useEffect(() => { load(); }, [load]);
 
   const prevAuditRunning = useRef(false);
+  const prevAuditRemoved = useRef(0);
   useEffect(() => {
     const unsub = subscribeAudit((snap) => {
       setAudit(snap);
       if (prevAuditRunning.current && !snap.running) load();
+      // Refresh the carrier list as removals happen during the audit
+      if (snap.running && snap.progress.removed > prevAuditRemoved.current) load();
       prevAuditRunning.current = snap.running;
+      prevAuditRemoved.current = snap.progress.removed;
     });
     return unsub;
   }, [load]);
