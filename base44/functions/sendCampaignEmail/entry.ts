@@ -35,12 +35,13 @@ export default async function(req: Request): Promise<Response> {
       }
     }
 
-    // Send via company SMTP (if configured) or built-in email service
+    // Send via company SMTP only — never fall back to the built-in email service
     const sendResult = await sendEmail(base44, {
       to: recipientEmail,
       subject: subject || `Dispatch Services for ${carrier.legal_name || carrier.dba_name || "your company"}`,
       body: emailBody || "",
       fromName,
+      requireSmtp: true,
     });
 
     // Create email log
