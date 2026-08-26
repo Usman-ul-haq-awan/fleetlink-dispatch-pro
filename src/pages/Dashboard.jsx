@@ -61,7 +61,7 @@ export default function Dashboard() {
   }
 
   const statCards = [
-    { label: "Total Carriers", value: stats.total, icon: Truck, color: "blue" },
+    { label: "Total Carriers", value: stats.total, icon: Truck, color: "blue", to: "/carriers" },
     { label: "Researched", value: stats.researched, icon: Search, color: "indigo" },
     { label: "Research Failures", value: stats.failed, icon: AlertCircle, color: "red" },
     { label: "Qualified", value: stats.qualified, icon: CheckCircle, color: "green" },
@@ -98,13 +98,25 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         {statCards.map(card => {
           const Icon = card.icon;
-          return (
-            <div key={card.label} className={`rounded-lg border p-4 ${colorClasses[card.color]}`}>
+          const inner = (
+            <>
               <div className="flex items-center justify-between mb-2">
                 <Icon className="w-5 h-5 opacity-70" />
                 <span className="text-2xl font-bold">{card.value}</span>
               </div>
               <p className="text-xs font-medium opacity-80">{card.label}</p>
+            </>
+          );
+          if (card.to) {
+            return (
+              <Link key={card.label} to={card.to} className={`rounded-lg border p-4 ${colorClasses[card.color]} hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer`}>
+                {inner}
+              </Link>
+            );
+          }
+          return (
+            <div key={card.label} className={`rounded-lg border p-4 ${colorClasses[card.color]}`}>
+              {inner}
             </div>
           );
         })}
