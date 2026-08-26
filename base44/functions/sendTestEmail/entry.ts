@@ -30,6 +30,7 @@ export default async function sendTestEmail(req: Request): Promise<Response> {
       subject,
       body: emailBody || "",
       fromName,
+      requireSmtp: true,
     });
 
     // Log the test send (carrier_id optional, only for traceability)

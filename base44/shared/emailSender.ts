@@ -6,9 +6,9 @@ import { secrets } from "base44:runtime";
 // (which only reaches registered app users without a connected custom domain).
 export async function sendEmail(
   base44: any,
-  opts: { to: string; subject: string; body: string; fromName?: string }
+  opts: { to: string; subject: string; body: string; fromName?: string; requireSmtp?: boolean }
 ): Promise<{ provider: string; messageId?: string }> {
-  const { to, subject, body, fromName } = opts;
+  const { to, subject, body, fromName, requireSmtp } = opts;
 
   const settings = await base44.entities.AppSetting.filter({ setting_category: "smtp" });
   const map: Record<string, string> = {};
@@ -50,6 +50,9 @@ export async function sendEmail(
   }
 
   // Fallback: built-in email service
+  if (requireSmtp) {
+    throw new Error("SMTP server is not configured. Add your SMTP host, port, username, password, and from-email in Settings → SMTP Email Server before sending test emails.");
+  }
   await base44.asServiceRole.integrations.Core.SendEmail({
     to,
     subject,
