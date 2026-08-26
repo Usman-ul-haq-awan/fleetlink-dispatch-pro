@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2 } from "lucide-react";
+import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2, ShieldCheck } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 import ResearchStepsSelector, { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
@@ -21,6 +21,8 @@ export default function CarrierResearch() {
   const stopRef = useRef(false);
   const [failedMcs, setFailedMcs] = useState([]);
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
+  const [auditing, setAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState(null);
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -35,6 +37,9 @@ export default function CarrierResearch() {
       return { reason: "Exception", detail: err.response?.data?.error || err.message || "Request failed" };
     }
     if (!data) return { reason: "No Response", detail: "No response from research worker" };
+    if (data.not_authorized) {
+      return { reason: "Not Authorized", detail: `Operating Status: ${data.operating_status || "NOT AUTHORIZED"} — carrier removed from database` };
+    }
     if (data.success && data.carrier && !data.carrier.legal_name) {
       return { reason: "No Carrier Found", detail: "FMCSA SAFER returned no real carrier for this MC number (no legal name present on the snapshot)." };
     }
@@ -104,11 +109,11 @@ export default function CarrierResearch() {
         prev ? {
           ...prev,
           steps: data.steps || [],
-          status: data.success ? "done" : "error",
-          errors: data.errors || (data.error ? [data.error] : []),
+          status: data.success ? "done" : (data.not_authorized ? "not_authorized" : "error"),
+          errors: data.not_authorized ? [`Not authorized: ${data.operating_status || "NOT AUTHORIZED"}`] : (data.errors || (data.error ? [data.error] : [])),
         } : prev
       );
-      if (!data.success && carrier.mc_number) recordFailure(`MC-${carrier.mc_number}`, data);
+      if (!data.success && !data.not_authorized && carrier.mc_number) recordFailure(`MC-${carrier.mc_number}`, data);
       return data;
     } catch (err) {
       const msg = err.response?.data?.error || err.message;
@@ -207,6 +212,46 @@ export default function CarrierResearch() {
   };
   const stopDiscovery = () => stopRunnerDiscovery();
 
+  const runAudit = async () => {
+    setAuditing(true);
+    setAuditResult(null);
+    try {
+      let remaining = 1;
+      let totalRemoved = 0;
+      let totalKept = 0;
+      let totalWorkerChecks = 0;
+      let allRemoved = [];
+      let rounds = 0;
+      while (remaining > 0 && rounds < 30) {
+        rounds++;
+        const res = await base44.functions.invoke("auditAuthorizedStatus", { max_worker_checks: 10, max_deletions: 10 });
+        const d = res.data;
+        totalRemoved += d.removed || 0;
+        totalKept += d.kept || 0;
+        totalWorkerChecks += d.checked_from_worker || 0;
+        allRemoved = [...allRemoved, ...(d.removed_carriers || [])];
+        remaining = d.remaining_unchecked || 0;
+        setAuditResult({
+          removed: totalRemoved,
+          kept: totalKept,
+          worker_checks: totalWorkerChecks,
+          stored_checks: d.checked_from_stored || 0,
+          remaining,
+          removed_carriers: allRemoved,
+          current: remaining > 0 ? `Round ${rounds}: ${d.removed} removed, ${remaining} still unchecked…` : "Audit complete",
+        });
+        if (remaining > 0) await new Promise(r => setTimeout(r, 1500));
+      }
+      setAuditResult(prev => ({ ...prev, current: "Audit complete", remaining: 0 }));
+      load();
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message;
+      setAuditResult(prev => ({ ...prev, current: `Audit error: ${msg}` }));
+    } finally {
+      setAuditing(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -285,6 +330,50 @@ export default function CarrierResearch() {
           </button>
           <p className="text-xs text-slate-400 w-full">Starts at the MC number you enter and continues +1 until the target count is reached.</p>
         </div>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h3 className="font-medium text-slate-800 text-sm flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4" /> Authorized Authority Audit
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Checks every carrier in the database for "AUTHORIZED FOR" operating authority status.
+              Carriers already researched are checked from stored data; others are verified live via the worker.
+              Unauthorized carriers are removed from the database.
+            </p>
+          </div>
+          <button onClick={runAudit} disabled={auditing || processing}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+            {auditing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+            {auditing ? "Auditing…" : "Audit Database"}
+          </button>
+        </div>
+        {auditResult && (
+          <div className="mt-3 pt-3 border-t border-slate-200">
+            <p className="text-xs text-slate-600 mb-2">{auditResult.current}</p>
+            <div className="flex gap-4 flex-wrap text-xs">
+              <span className="text-green-700">Kept: {auditResult.kept}</span>
+              <span className="text-red-700">Removed: {auditResult.removed}</span>
+              <span className="text-slate-500">Worker checks: {auditResult.worker_checks}</span>
+              {auditResult.remaining > 0 && <span className="text-amber-600">Remaining: {auditResult.remaining}</span>}
+            </div>
+            {auditResult.removed_carriers?.length > 0 && (
+              <div className="mt-2 max-h-32 overflow-y-auto space-y-1">
+                {auditResult.removed_carriers.slice(0, 20).map((c, i) => (
+                  <div key={i} className="text-xs text-slate-500">
+                    <span className="font-medium text-slate-700">{c.legal_name || c.usdot || c.mc || c.id}</span>
+                    <span className="text-red-500 ml-2">— {c.operating_status || "NOT AUTHORIZED"}</span>
+                  </div>
+                ))}
+                {auditResult.removed_carriers.length > 20 && (
+                  <p className="text-xs text-slate-400">…and {auditResult.removed_carriers.length - 20} more</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {discovery.running && (

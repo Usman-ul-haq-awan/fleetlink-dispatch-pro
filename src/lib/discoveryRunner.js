@@ -44,6 +44,9 @@ function buildFailureReason(data, err) {
     return { reason: "Exception", detail: err.response?.data?.error || err.message || "Request failed" };
   }
   if (!data) return { reason: "No Response", detail: "No response from research worker" };
+  if (data.not_authorized) {
+    return { reason: "Not Authorized", detail: `Operating Status: ${data.operating_status || "NOT AUTHORIZED"} — carrier removed from database` };
+  }
   if (data.success && data.carrier && !data.carrier.legal_name) {
     return { reason: "No Carrier Found", detail: "FMCSA SAFER returned no real carrier for this MC number (no legal name present on the snapshot)." };
   }
@@ -109,7 +112,7 @@ export async function startDiscovery(target, startMc) {
           found += 1;
           patchProgress({ done: found });
         } else {
-          if (data.carrier_id) {
+          if (data.carrier_id && !data.not_authorized) {
             try { await base44.entities.Carrier.delete(data.carrier_id); } catch {}
           }
           recordFailure(`MC-${currentMc}`, data);

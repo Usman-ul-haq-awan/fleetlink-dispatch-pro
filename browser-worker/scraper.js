@@ -178,7 +178,7 @@ async function safeGoto(page, url, timeoutMs) {
 async function runResearch({ usdot, mc, steps }) {
   // Selected steps. If not provided → run all (backward compat).
   // Company Snapshot is always required (entry point + identity validation).
-  const ALL_STEPS = ['company_snapshot', 'sms_overview', 'sms_profile', 'carrier_history', 'registration', 'insurance', 'inspection_crash', 'safety_rating'];
+  const ALL_STEPS = ['company_snapshot', 'sms_overview', 'sms_profile', 'carrier_history', 'registration', 'insurance', 'inspection_crash', 'safety_rating', 'operation_status'];
   const enabled = Array.isArray(steps) && steps.length > 0
     ? new Set([...['company_snapshot'], ...steps.filter(s => ALL_STEPS.includes(s))])
     : new Set(ALL_STEPS);
@@ -207,6 +207,7 @@ async function runResearch({ usdot, mc, steps }) {
     insurance: { status: 'pending' },
     inspection_crash: { status: 'pending' },
     safety_rating: { status: 'pending' },
+    operation_status: { status: 'pending' },
     contacts: {},
     links_discovered: {},
     identity_verified: false,
@@ -308,6 +309,24 @@ async function runResearch({ usdot, mc, steps }) {
       fields: snapshotPairs,
     };
     stepDone('Company Snapshot', 'ok', page.url());
+
+    // Operation Authority Status gate — computed from snapshot data (no extra
+    // page navigation). When enabled, the backend function uses this to decide
+    // whether to keep or remove the carrier from the database.
+    if (isEnabled('operation_status')) {
+      const isAuthorized = operatingStatus.toUpperCase().includes('AUTHORIZED FOR');
+      result.operation_status = {
+        status: isAuthorized ? 'ok' : 'not_authorized',
+        authorized: isAuthorized,
+        operating_status: operatingStatus,
+        source_url: page.url(),
+        retrieval_date: nowIso(),
+      };
+      stepDone('Operating Authority Status', isAuthorized ? 'ok' : 'not_authorized', page.url());
+    } else {
+      result.operation_status = { status: 'skipped' };
+      stepDone('Operating Authority Status', 'skipped', null);
+    }
 
     // STEP 11 — Discover carrier-specific links from the actual page (do not construct guessed URLs)
     const smsLink = findLinkByText(links, ['SMS Results', 'SMS', 'Safety Measurement']);

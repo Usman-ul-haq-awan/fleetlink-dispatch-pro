@@ -10,6 +10,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { secrets } from "base44:runtime";
 import { qualifySafety } from "../../shared/safetyEngine.ts";
 import { scoreLead } from "../../shared/leadScoreEngine.ts";
+import { deleteCarrierAndRelated, isAuthorizedStatus } from "../../shared/carrierCleanup.ts";
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -22,7 +23,7 @@ export default async function(req: Request): Promise<Response> {
 
     // Normalize selected steps. If omitted/null → run all steps (backward compat).
     // Company Snapshot is always included — it's the entry point + identity check.
-    const ALL_STEP_KEYS = ["company_snapshot", "sms_overview", "sms_profile", "carrier_history", "registration", "insurance", "inspection_crash", "safety_rating"];
+    const ALL_STEP_KEYS = ["company_snapshot", "sms_overview", "sms_profile", "carrier_history", "registration", "insurance", "inspection_crash", "safety_rating", "operation_status"];
     const selectedSteps: string[] = Array.isArray(steps) && steps.length > 0
       ? Array.from(new Set([...["company_snapshot"], ...steps.filter((s: string) => ALL_STEP_KEYS.includes(s))]))
       : ALL_STEP_KEYS;
@@ -136,6 +137,30 @@ export default async function(req: Request): Promise<Response> {
       });
       await base44.entities.Carrier.update(carrierId, { research_status: "Failed", lead_status: "Failed" });
       return Response.json({ success: false, carrier_id: carrierId, error: "IDENTITY_MISMATCH", steps: data.steps || [] });
+    }
+
+    // Operating Authority Status gate — when enabled, only keep carriers whose
+    // operating authority status contains "AUTHORIZED FOR". Unauthorized carriers
+    // are removed from the database entirely.
+    if (selectedSteps.includes("operation_status") && data.operation_status) {
+      const liveStatus = data.operation_status.operating_status || data.safer?.operating_status || "";
+      if (!isAuthorizedStatus(liveStatus)) {
+        await deleteCarrierAndRelated(base44, carrierId);
+        await base44.entities.ActivityLog.create({
+          action: "Carrier removed — not authorized (research gate)",
+          workflow: "researchCarrierBrowser",
+          details: `Operating Status: ${liveStatus || "NOT AUTHORIZED"}`,
+          status: "Warning",
+          timestamp: now,
+        });
+        return Response.json({
+          success: false,
+          carrier_id: carrierId,
+          not_authorized: true,
+          operating_status: liveStatus,
+          steps: data.steps || [],
+        });
+      }
     }
 
     const c = data.carrier || {};

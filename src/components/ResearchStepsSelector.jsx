@@ -1,5 +1,5 @@
 import React from "react";
-import { Search, FileText, Shield, History, ClipboardList, FileCheck, AlertTriangle, Star, Lock } from "lucide-react";
+import { Search, FileText, Shield, History, ClipboardList, FileCheck, AlertTriangle, Star, Lock, BadgeCheck } from "lucide-react";
 
 // Canonical research step definitions. The `key` must match the keys used by
 // the browser worker (browser-worker/scraper.js) and the backend function
@@ -15,6 +15,7 @@ export const RESEARCH_STEPS = [
   { key: "insurance", name: "Licensing & Insurance", icon: FileCheck, desc: "Insurance filings, policy numbers, coverage amounts", required: false },
   { key: "inspection_crash", name: "Inspections & Crashes", icon: AlertTriangle, desc: "Inspection counts, violations, out-of-service, crashes", required: false },
   { key: "safety_rating", name: "Safety Rating", icon: Star, desc: "Conditional/Satisfactory/Unsatisfactory safety audit rating", required: false },
+  { key: "operation_status", name: "Operating Authority", icon: BadgeCheck, desc: "Gate — only keep carriers with AUTHORIZED FOR operating status", required: false },
 ];
 
 export const ALL_STEP_KEYS = RESEARCH_STEPS.map(s => s.key);

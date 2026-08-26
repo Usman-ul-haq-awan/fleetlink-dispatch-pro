@@ -1,8 +1,9 @@
 import React from "react";
-import { CheckCircle, XCircle, Clock, Loader2, AlertCircle, ExternalLink, MinusCircle } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Loader2, AlertCircle, ExternalLink, MinusCircle, ShieldX } from "lucide-react";
 
 const DEFAULT_STEPS = [
   { name: "Company Snapshot", status: "pending" },
+  { name: "Operating Authority Status", status: "pending" },
   { name: "SMS Overview", status: "pending" },
   { name: "Complete SMS Profile", status: "pending" },
   { name: "Carrier History", status: "pending" },
@@ -15,6 +16,7 @@ const DEFAULT_STEPS = [
 function StepIcon({ status }) {
   if (status === "ok") return <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />;
   if (status === "failed") return <XCircle className="w-4 h-4 text-red-500 shrink-0" />;
+  if (status === "not_authorized") return <ShieldX className="w-4 h-4 text-red-500 shrink-0" />;
   if (status === "not_found") return <Clock className="w-4 h-4 text-slate-300 shrink-0" />;
   if (status === "skipped") return <MinusCircle className="w-4 h-4 text-slate-300 shrink-0" />;
   return <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />;
@@ -35,9 +37,10 @@ export default function ResearchStepsPanel({ research }) {
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
           status === "running" ? "bg-blue-100 text-blue-700" :
           status === "done" ? "bg-green-100 text-green-700" :
+          status === "not_authorized" ? "bg-red-100 text-red-700" :
           "bg-red-100 text-red-700"
         }`}>
-          {status === "running" ? "Running in browser..." : status === "done" ? "Complete" : "Error"}
+          {status === "running" ? "Running in browser..." : status === "done" ? "Complete" : status === "not_authorized" ? "Not Authorized — Removed" : "Error"}
         </span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
