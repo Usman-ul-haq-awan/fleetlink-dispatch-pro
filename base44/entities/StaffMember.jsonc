@@ -1,0 +1,76 @@
+{
+  "name": "StaffMember",
+  "type": "object",
+  "properties": {
+    "full_name": {
+      "type": "string",
+      "description": "Staff member's full name"
+    },
+    "email": {
+      "type": "string",
+      "description": "Staff member's email address (used for login)"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "user"
+      ],
+      "default": "user",
+      "description": "App role \u2014 admin or staff"
+    },
+    "identity_document_url": {
+      "type": "string",
+      "description": "Uploaded identity document file URL"
+    },
+    "identity_document_name": {
+      "type": "string",
+      "description": "Original filename of the uploaded identity document"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Invited",
+        "Active",
+        "Inactive"
+      ],
+      "default": "Invited"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Linked User entity ID once the staff member registers"
+    }
+  },
+  "required": [
+    "full_name",
+    "email"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
