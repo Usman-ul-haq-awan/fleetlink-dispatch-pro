@@ -1,8 +1,24 @@
 import React, { useState } from "react";
-import { Shield, User, Loader2, Eye, ChevronUp, ChevronDown } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { Shield, User, Loader2, Eye, ChevronUp, ChevronDown, Mail } from "lucide-react";
 
 export default function StaffList({ users, staffMembers, onRoleChange, currentUserId }) {
   const [changingRole, setChangingRole] = useState(null);
+  const [resending, setResending] = useState(null);
+  const [resendMsg, setResendMsg] = useState({});
+
+  const handleResendInvite = async (email, role, key) => {
+    setResending(key);
+    try {
+      await base44.users.inviteUser(email, role);
+      setResendMsg({ [key]: { type: "success", text: "Invitation re-sent. Check inbox (and spam folder)." } });
+    } catch (err) {
+      setResendMsg({ [key]: { type: "error", text: err.response?.data?.error || err.message || "Failed to re-send invitation" } });
+    } finally {
+      setResending(null);
+      setTimeout(() => setResending(null), 3000);
+    }
+  };
 
   // Merge Users and StaffMembers by email
   const emailToStaff = {};
@@ -85,12 +101,13 @@ export default function StaffList({ users, staffMembers, onRoleChange, currentUs
               <th className="text-left px-4 py-2 font-medium text-slate-600">Status</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Role</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">ID Document</th>
+              <th className="text-center px-4 py-2 font-medium text-slate-600">Resend Invite</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Change Role</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {merged.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
             ) : merged.map(m => (
               <tr key={m.key} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">{m.full_name}</td>
@@ -119,6 +136,23 @@ export default function StaffList({ users, staffMembers, onRoleChange, currentUs
                   ) : (
                     <span className="text-slate-300 text-xs">—</span>
                   )}
+                </td>
+                <td className="px-4 py-2 text-center">
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      onClick={() => handleResendInvite(m.email, m.role, m.key)}
+                      disabled={resending === m.key}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
+                      title="Re-send invitation email">
+                      {resending === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                      Resend
+                    </button>
+                    {resendMsg[m.key] && (
+                      <span className={`text-[10px] ${resendMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
+                        {resendMsg[m.key].text}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-center">
                   {changingRole === m.key ? (
