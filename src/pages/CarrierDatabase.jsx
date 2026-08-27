@@ -1,9 +1,23 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square } from "lucide-react";
 import * as XLSX from "xlsx";
 import { listAllCarriers } from "@/lib/paginatedList";
+import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
+
+// Classifies a carrier's operation type from the stored carrier_segment /
+// operating_status fields. FMCSA uses "A" = Interstate, "B" = Intrastate,
+// "C" = Both; SMS may store a descriptive string.
+function getOperationType(carrier) {
+  const seg = String(carrier.carrier_segment || "").toUpperCase();
+  const op = String(carrier.operating_status || "").toUpperCase();
+  const text = `${seg} ${op}`;
+  if (text.includes("C") && (text.includes("BOTH") || seg === "C")) return "Both";
+  if (text.includes("INTRASTATE") || seg === "B" || seg.startsWith("B ")) return "Intrastate";
+  if (text.includes("INTERSTATE") || seg === "A" || seg.startsWith("A ")) return "Interstate";
+  return "Unknown";
+}
 
 const STATUS_COLORS = {
   "Imported": "bg-slate-100 text-slate-700",
@@ -38,12 +52,19 @@ export default function CarrierDatabase() {
   const [statusFilter, setStatusFilter] = useState("");
   const [safetyFilter, setSafetyFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
+  const [operationFilter, setOperationFilter] = useState("");
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [researching, setResearching] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [researchCenter, setResearchCenter] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" } });
   const [searchParams] = useSearchParams();
   const PAGE_SIZE = 50;
+
+  useEffect(() => {
+    const unsub = subscribeResearch((snap) => setResearchCenter(snap));
+    return unsub;
+  }, []);
 
   // Apply a safety filter passed via the URL (e.g. ?safety=Qualified) on first load.
   useEffect(() => {
@@ -69,6 +90,7 @@ export default function CarrierDatabase() {
       if (statusFilter) filtered = filtered.filter(c => c.lead_status === statusFilter);
       if (safetyFilter) filtered = filtered.filter(c => c.safety_qualification === safetyFilter);
       if (stateFilter) filtered = filtered.filter(c => c.state === stateFilter);
+      if (operationFilter) filtered = filtered.filter(c => getOperationType(c) === operationFilter);
 
       setCarriers(filtered);
       setHasMore(filtered.length === PAGE_SIZE);
@@ -77,7 +99,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, safetyFilter, stateFilter]);
+  }, [search, statusFilter, safetyFilter, stateFilter, operationFilter]);
 
   useEffect(() => { loadCarriers(true); }, [loadCarriers]);
 
@@ -140,6 +162,19 @@ export default function CarrierDatabase() {
           <p className="text-slate-500 text-sm mt-1">{carriers.length} carriers</p>
         </div>
         <div className="flex items-center gap-2">
+          {!researchCenter.running ? (
+            <button onClick={startRunnerResearch} disabled={carriers.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+              <Radar className="w-4 h-4" />
+              Research Center
+            </button>
+          ) : (
+            <button onClick={stopRunnerResearch}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
+              <Square className="w-4 h-4" />
+              Stop Research
+            </button>
+          )}
           <button onClick={exportToExcel} disabled={exporting || carriers.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
@@ -151,9 +186,24 @@ export default function CarrierDatabase() {
         </div>
       </div>
 
+      {researchCenter.running && (
+        <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-violet-800 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> {researchCenter.progress.current}
+            </span>
+            <span className="text-sm text-violet-600">{researchCenter.progress.done} done, {researchCenter.progress.failed} failed</span>
+          </div>
+          <div className="w-full bg-violet-100 rounded-full h-2">
+            <div className="bg-violet-600 h-2 rounded-full transition-all" style={{ width: `${researchCenter.progress.total ? (researchCenter.progress.done + researchCenter.progress.failed) / researchCenter.progress.total * 100 : 0}%` }} />
+          </div>
+          <p className="text-xs text-violet-700 mt-2">Running in the background — you can navigate to other pages and this will keep going.</p>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             <input
@@ -183,6 +233,14 @@ export default function CarrierDatabase() {
             <option value="">All States</option>
             {states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <select value={operationFilter} onChange={e => setOperationFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All Operations</option>
+            <option value="Interstate">Interstate</option>
+            <option value="Intrastate">Intrastate</option>
+            <option value="Both">Both</option>
+            <option value="Unknown">Unknown</option>
+          </select>
         </div>
       </div>
 
@@ -208,6 +266,7 @@ export default function CarrierDatabase() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">USDOT</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">MC</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">State</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Operation</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Equipment</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Units</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Safety</th>
@@ -230,6 +289,16 @@ export default function CarrierDatabase() {
                     <td className="px-4 py-3 text-slate-600">{carrier.usdot_number || "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{carrier.mc_number || "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{carrier.state || "—"}</td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const op = getOperationType(carrier);
+                        const cls = op === "Interstate" ? "bg-blue-100 text-blue-700" :
+                          op === "Intrastate" ? "bg-amber-100 text-amber-700" :
+                          op === "Both" ? "bg-purple-100 text-purple-700" :
+                          "bg-slate-100 text-slate-500";
+                        return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{op}</span>;
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-slate-600 text-xs">{carrier.equipment_types || "—"}</td>
                     <td className="px-4 py-3 text-center text-slate-600">{carrier.power_units || "—"}</td>
                     <td className="px-4 py-3">
