@@ -68,6 +68,14 @@ After pushing your changes to git, open the Base44 dashboard and publish the app
 base44 dashboard open
 ```
 
+## Project Administrators
+
+- **Usman UL Haq** — Admin — 📞 03114111899
+
+## Staff Access
+
+Staff members are invited through the admin-only **Settings → Staff Management** panel. Each invited staff member receives an email invitation and registers through the standard auth flow. All shared app URLs redirect unauthenticated users to the login page — no one enters the app without signing in.
+
 ## Docs & Support
 
 Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)

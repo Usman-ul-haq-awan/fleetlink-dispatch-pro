@@ -52,7 +52,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3">
-          {navItems.filter(item => outreachEnabled || (item.path !== "/campaigns" && item.path !== "/calling")).map(item => {
+          {navItems.filter(item => (outreachEnabled || (item.path !== "/campaigns" && item.path !== "/calling")) && (item.path !== "/settings" || user?.role === "admin")).map(item => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path ||
               (item.path !== "/" && location.pathname.startsWith(item.path));
@@ -77,9 +77,14 @@ export default function Layout() {
           {user && (
             <div className="mb-2">
               <p className="text-sm text-white font-medium">{user.full_name || user.email}</p>
-              <p className="text-xs text-slate-400 capitalize">{user.role || "user"}</p>
+              <p className="text-xs text-slate-400 capitalize">{user.role === "admin" ? "Admin" : "Staff"}</p>
             </div>
           )}
+          <div className="mb-3 pt-2 border-t border-slate-700/50">
+            <p className="text-xs text-slate-500 mb-0.5">Project Admin</p>
+            <p className="text-xs text-slate-300 font-medium">Usman UL Haq</p>
+            <p className="text-xs text-slate-400">03114111899</p>
+          </div>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"

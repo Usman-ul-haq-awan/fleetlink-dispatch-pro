@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Save } from "lucide-react";
+import { Save, ShieldAlert, Phone, UserCog, Loader2 } from "lucide-react";
+import StaffManagement from "@/components/StaffManagement";
 
 const SETTING_GROUPS = [
   {
@@ -81,8 +82,15 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
   const [outreachEnabled, setOutreachEnabled] = useState(false);
   const [togglingOutreach, setTogglingOutreach] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userLoading, setUserLoading] = useState(true);
 
-  useEffect(() => { loadSettings(); }, []);
+  useEffect(() => {
+    loadSettings();
+    base44.auth.me()
+      .then(u => { setCurrentUser(u); setUserLoading(false); })
+      .catch(() => setUserLoading(false));
+  }, []);
 
   const loadSettings = async () => {
     try {
@@ -188,6 +196,28 @@ export default function Settings() {
       className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />;
   };
 
+  // Settings panel is admin-only. Staff members are shown an access-denied view.
+  if (userLoading) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+  if (currentUser?.role !== "admin") {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg border border-amber-200 p-8 text-center">
+          <ShieldAlert className="w-12 h-12 text-amber-400 mx-auto mb-3" />
+          <h1 className="text-xl font-bold text-slate-900 mb-1">Admins Only</h1>
+          <p className="text-sm text-slate-500">
+            The Settings panel is restricted to administrators. Staff members should use the main app navigation.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -219,6 +249,28 @@ export default function Settings() {
           >
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${outreachEnabled ? "translate-x-6" : "translate-x-1"}`} />
           </button>
+        </div>
+      </div>
+
+      <StaffManagement />
+
+      <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
+        <h2 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
+          <UserCog className="w-5 h-5 text-slate-600" />
+          Project Administrators
+        </h2>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-semibold shrink-0">UH</div>
+            <div>
+              <p className="font-medium text-slate-900">Usman UL Haq</p>
+              <p className="text-sm text-slate-500 flex items-center gap-1.5 mt-0.5">
+                <Phone className="w-3.5 h-3.5" />
+                03114111899
+              </p>
+              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Admin</span>
+            </div>
+          </div>
         </div>
       </div>
 
