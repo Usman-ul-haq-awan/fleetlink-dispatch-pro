@@ -43,6 +43,21 @@ export default function StaffManagement() {
     await load();
   };
 
+  const handleDelete = async (userId, staffMemberId, email) => {
+    if (!window.confirm(`Remove ${email} from the system? This deletes their account and staff record.`)) return;
+    try {
+      if (staffMemberId) {
+        await base44.entities.StaffMember.delete(staffMemberId);
+      }
+      if (userId) {
+        await base44.entities.User.delete(userId);
+      }
+      await load();
+    } catch (err) {
+      alert("Delete failed: " + (err.response?.data?.error || err.message));
+    }
+  };
+
   return (
     <div>
       <AddStaffForm onAdded={load} />
@@ -53,6 +68,7 @@ export default function StaffManagement() {
           users={users}
           staffMembers={staffMembers}
           onRoleChange={handleRoleChange}
+          onDelete={handleDelete}
           currentUserId={currentUser?.id}
         />
       )}

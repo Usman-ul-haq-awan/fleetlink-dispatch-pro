@@ -1,23 +1,48 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Shield, User, Loader2, Eye, ChevronUp, ChevronDown, Mail } from "lucide-react";
+import { Shield, User, Loader2, Eye, ChevronUp, ChevronDown, Mail, KeyRound, Trash2 } from "lucide-react";
 
-export default function StaffList({ users, staffMembers, onRoleChange, currentUserId }) {
+export default function StaffList({ users, staffMembers, onRoleChange, onDelete, currentUserId }) {
   const [changingRole, setChangingRole] = useState(null);
   const [resending, setResending] = useState(null);
-  const [resendMsg, setResendMsg] = useState({});
+  const [resetting, setResetting] = useState(null);
+  const [actionMsg, setActionMsg] = useState({});
+
+  const setMsg = (key, type, text) => {
+    setActionMsg(prev => ({ ...prev, [key]: { type, text } }));
+    setTimeout(() => setActionMsg(prev => ({ ...prev, [key]: undefined })), 4000);
+  };
 
   const handleResendInvite = async (email, role, key) => {
     setResending(key);
     try {
       await base44.users.inviteUser(email, role);
-      setResendMsg({ [key]: { type: "success", text: "Invitation re-sent. Check inbox (and spam folder)." } });
+      setMsg(key, "success", "Invitation re-sent. Check inbox (and spam folder).");
     } catch (err) {
-      setResendMsg({ [key]: { type: "error", text: err.response?.data?.error || err.message || "Failed to re-send invitation" } });
+      setMsg(key, "error", err.response?.data?.error || err.message || "Failed to re-send invitation");
     } finally {
       setResending(null);
-      setTimeout(() => setResending(null), 3000);
     }
+  };
+
+  const handleResetPassword = async (email, key) => {
+    setResetting(key);
+    try {
+      await base44.auth.resetPasswordRequest(email);
+      setMsg(key, "success", "Password reset email sent. Check inbox (and spam folder).");
+    } catch (err) {
+      setMsg(key, "error", err.response?.data?.error || err.message || "Failed to send reset email");
+    } finally {
+      setResetting(null);
+    }
+  };
+
+  const handleDelete = async (userId, staffMemberId, email, key) => {
+    if (userId === currentUserId) {
+      alert("You cannot delete your own account.");
+      return;
+    }
+    await onDelete(userId, staffMemberId, email);
   };
 
   // Merge Users and StaffMembers by email
@@ -101,13 +126,14 @@ export default function StaffList({ users, staffMembers, onRoleChange, currentUs
               <th className="text-left px-4 py-2 font-medium text-slate-600">Status</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Role</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">ID Document</th>
-              <th className="text-center px-4 py-2 font-medium text-slate-600">Resend Invite</th>
+              <th className="text-center px-4 py-2 font-medium text-slate-600">Account Actions</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Change Role</th>
+              <th className="text-center px-4 py-2 font-medium text-slate-600">Delete</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {merged.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
             ) : merged.map(m => (
               <tr key={m.key} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">{m.full_name}</td>
@@ -139,17 +165,27 @@ export default function StaffList({ users, staffMembers, onRoleChange, currentUs
                 </td>
                 <td className="px-4 py-2 text-center">
                   <div className="flex flex-col items-center gap-1">
-                    <button
-                      onClick={() => handleResendInvite(m.email, m.role, m.key)}
-                      disabled={resending === m.key}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
-                      title="Re-send invitation email">
-                      {resending === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                      Resend
-                    </button>
-                    {resendMsg[m.key] && (
-                      <span className={`text-[10px] ${resendMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
-                        {resendMsg[m.key].text}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleResendInvite(m.email, m.role, m.key)}
+                        disabled={resending === m.key}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
+                        title="Re-send invitation email">
+                        {resending === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                        Resend
+                      </button>
+                      <button
+                        onClick={() => handleResetPassword(m.email, m.key)}
+                        disabled={resetting === m.key}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-amber-700 border-amber-200 hover:bg-amber-50 disabled:opacity-50 whitespace-nowrap"
+                        title="Send password reset email">
+                        {resetting === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                        Reset PW
+                      </button>
+                    </div>
+                    {actionMsg[m.key] && (
+                      <span className={`text-[10px] ${actionMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
+                        {actionMsg[m.key].text}
                       </span>
                     )}
                   </div>
@@ -170,6 +206,16 @@ export default function StaffList({ users, staffMembers, onRoleChange, currentUs
                       {m.role === "admin" ? <><ChevronDown className="w-3.5 h-3.5" /> Make Staff</> : <><ChevronUp className="w-3.5 h-3.5" /> Make Admin</>}
                     </button>
                   )}
+                </td>
+                <td className="px-4 py-2 text-center">
+                  <button
+                    onClick={() => handleDelete(m.userId, m.staffMemberId, m.email, m.key)}
+                    disabled={m.userId === currentUserId}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-red-700 border-red-200 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
+                    title={m.userId === currentUserId ? "You cannot delete your own account" : "Remove staff member"}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
