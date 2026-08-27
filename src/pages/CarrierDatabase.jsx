@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square } from "lucide-react";
+import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { listAllCarriers } from "@/lib/paginatedList";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
@@ -58,8 +58,45 @@ export default function CarrierDatabase() {
   const [researching, setResearching] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [researchCenter, setResearchCenter] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" } });
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
   const [searchParams] = useSearchParams();
   const PAGE_SIZE = 50;
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === carriers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(carriers.map(c => c.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} carrier(s)? This removes the carrier and all its related records. This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const BATCH = 25;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        await base44.entities.Carrier.deleteMany({ id: { $in: ids.slice(i, i + BATCH) } });
+      }
+      setSelectedIds(new Set());
+      await loadCarriers(true);
+    } catch (err) {
+      alert("Delete failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     const unsub = subscribeResearch((snap) => setResearchCenter(snap));
@@ -180,6 +217,11 @@ export default function CarrierDatabase() {
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Export to Excel
           </button>
+          <button onClick={handleBulkDelete} disabled={deleting || selectedIds.size === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+          </button>
           <Link to="/import-export" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
             Import Carriers
           </Link>
@@ -262,7 +304,15 @@ export default function CarrierDatabase() {
             <table className="min-w-full w-max text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
+                  <th className="px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={carriers.length > 0 && selectedIds.size === carriers.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
+                   <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">USDOT</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">MC</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">State</th>
@@ -277,7 +327,15 @@ export default function CarrierDatabase() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {carriers.map(carrier => (
-                  <tr key={carrier.id} className="hover:bg-slate-50">
+                  <tr key={carrier.id} className={`hover:bg-slate-50 ${selectedIds.has(carrier.id) ? "bg-blue-50" : ""}`}>
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(carrier.id)}
+                        onChange={() => toggleSelect(carrier.id)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/carriers/${carrier.id}`} className="font-medium text-slate-900 hover:text-blue-600">
                         {carrier.legal_name || carrier.dba_name || "Unknown"}
