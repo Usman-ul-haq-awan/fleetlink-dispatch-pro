@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Save, ShieldAlert, Phone, UserCog, Loader2 } from "lucide-react";
+import { Save, Phone, UserCog, Loader2 } from "lucide-react";
 import StaffManagement from "@/components/StaffManagement";
 
 const SETTING_GROUPS = [
@@ -205,17 +206,7 @@ export default function Settings() {
     );
   }
   if (currentUser?.role !== "admin") {
-    return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg border border-amber-200 p-8 text-center">
-          <ShieldAlert className="w-12 h-12 text-amber-400 mx-auto mb-3" />
-          <h1 className="text-xl font-bold text-slate-900 mb-1">Admins Only</h1>
-          <p className="text-sm text-slate-500">
-            The Settings panel is restricted to administrators. Staff members should use the main app navigation.
-          </p>
-        </div>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
 
   return (
