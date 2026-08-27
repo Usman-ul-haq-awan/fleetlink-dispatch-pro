@@ -26,7 +26,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -41,8 +41,6 @@ const AuthenticatedApp = () => {
   if (authError?.type === 'user_not_registered') {
     return <UserNotRegisteredError />;
   }
-
-  const isAuthenticated = !authError;
 
   return (
     <Routes>
