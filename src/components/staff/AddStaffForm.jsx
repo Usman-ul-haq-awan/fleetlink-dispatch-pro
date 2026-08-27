@@ -1,36 +1,19 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { UserPlus, Loader2, KeyRound, Copy, Check, Upload, RefreshCw, IdCard } from "lucide-react";
-
-function generatePassword(length = 12) {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*";
-  let pwd = "";
-  for (let i = 0; i < length; i++) {
-    pwd += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return pwd;
-}
+import { UserPlus, Loader2, Upload, IdCard, Mail } from "lucide-react";
 
 export default function AddStaffForm({ onAdded }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("user");
-  const [password, setPassword] = useState(() => generatePassword());
   const [identityFile, setIdentityFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  const [copied, setCopied] = useState(false);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) setIdentityFile(file);
-  };
-
-  const copyPassword = () => {
-    navigator.clipboard.writeText(password);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleSubmit = async () => {
@@ -64,7 +47,7 @@ export default function AddStaffForm({ onAdded }) {
 
       setMessage({
         type: "success",
-        text: `${fullName.trim()} added. An invitation email was sent to ${email.trim()}. Share the generated password below with the staff member — they'll use it when registering from the login page.`,
+        text: `${fullName.trim()} added. An invitation email was sent to ${email.trim()}. They must click the "App Access" link in that email to set their own password and activate their account — no password is needed from you.`,
       });
 
       setFullName("");
@@ -72,7 +55,6 @@ export default function AddStaffForm({ onAdded }) {
       setPhone("");
       setRole("user");
       setIdentityFile(null);
-      setPassword(generatePassword());
       if (onAdded) onAdded();
     } catch (err) {
       setMessage({ type: "error", text: err.response?.data?.error || err.message || "Failed to add staff member" });
@@ -88,7 +70,7 @@ export default function AddStaffForm({ onAdded }) {
         Add Staff Member
       </h3>
       <p className="text-sm text-slate-500 mb-4">
-        Enter the staff member's details below. A unique password is auto-generated — share it with them privately. They'll register using their email and this password from the login page.
+        Enter the staff member's details below. They'll receive an invitation email to set their own password and activate their account.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
@@ -117,24 +99,11 @@ export default function AddStaffForm({ onAdded }) {
         </div>
       </div>
 
-      <div className="mb-3">
-        <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
-          <KeyRound className="w-3.5 h-3.5" /> Auto-Generated Password
-        </label>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-lg">
-            {password}
-          </div>
-          <button onClick={() => setPassword(generatePassword())} type="button" title="Generate new password"
-            className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg border border-slate-200">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button onClick={copyPassword} type="button" title="Copy password"
-            className="p-2 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg border border-slate-200">
-            {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-          </button>
-        </div>
-        <p className="text-xs text-slate-400 mt-1">Each staff member gets a unique password. Copy and share it with them privately.</p>
+      <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+        <Mail className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+        <p className="text-xs text-blue-700">
+          An invitation email will be sent automatically. The staff member clicks the <strong>"App Access"</strong> link in that email to set their own password and activate their account — you don't need to create or share a password.
+        </p>
       </div>
 
       <div className="mb-4">
