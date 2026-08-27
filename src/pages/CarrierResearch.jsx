@@ -345,6 +345,8 @@ export default function CarrierResearch() {
             <div className="flex gap-4 flex-wrap text-xs">
               <span className="text-green-700">Kept: {audit.progress.kept}</span>
               <span className="text-red-700">Removed: {audit.progress.removed}</span>
+              <span className="text-orange-600">Dupes removed: {audit.progress.duplicatesRemoved}</span>
+              <span className="text-blue-600">Backfilled: {audit.progress.backfilled}</span>
               <span className="text-slate-500">Worker checks: {audit.progress.workerChecks}</span>
               {audit.progress.remaining > 0 && <span className="text-amber-600">Remaining: {audit.progress.remaining}</span>}
             </div>

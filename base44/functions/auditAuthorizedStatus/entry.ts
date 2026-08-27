@@ -1,17 +1,19 @@
-// Audits the carrier database for operating authority status.
-// For each carrier:
-//   1. If operating_status is already stored, check it immediately.
-//   2. If operating_status is missing, call the browser worker to fetch the
-//      Company Snapshot and check the live status.
-// Carriers whose status does NOT contain "AUTHORIZED FOR" are removed from
-// the database along with all their related child records.
+// Audits the carrier database for:
+//   1. Operating authority status — removes carriers that are NOT AUTHORIZED
+//      or OUT-OF-SERVICE, or that FMCSA has no record of (dummy/test records).
+//      When the worker is called to verify status, it ALSO backfills any
+//      missing carrier fields (legal_name, address, phone, etc.) from the
+//      same snapshot so the audit enriches the database, not just prunes it.
+//   2. Duplicate carriers — removes carriers that share the same USDOT or MC
+//      number, keeping the most complete record.
 //
-// Processes a bounded batch per call (max_worker_checks) to avoid timeouts.
+// Processes a bounded batch per call to avoid timeouts.
 // Returns progress so the frontend can call again until all carriers are audited.
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import { secrets } from "base44:runtime";
 import { deleteCarrierAndRelated, isAuthorizedStatus, isExplicitlyUnauthorized } from "../../shared/carrierCleanup.ts";
+import { mapWorkerDataToCarrierFields, buildBackfillUpdate, completenessScore } from "../../shared/carrierFieldMapper.ts";
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -34,12 +36,11 @@ export default async function(req: Request): Promise<Response> {
     let checkedFromWorker = 0;
     let removedCount = 0;
     let keptCount = 0;
+    let backfilledCount = 0;
+    let duplicatesRemoved = 0;
     let workerCallsUsed = 0;
     const removedCarriers: any[] = [];
 
-    // Returns true when the worker response indicates FMCSA has no real
-    // carrier for this USDOT/MC (no legal name, no operating status, or
-    // identity mismatch). These dummy/invalid records should be removed.
     const isCarrierNotFound = (data: any): boolean => {
       if (!data) return false;
       if (data.identity_verified === false) return true;
@@ -48,11 +49,71 @@ export default async function(req: Request): Promise<Response> {
       return !legalName && !liveStatus;
     };
 
+    // ---- Phase 1: Duplicate detection ----
+    // Group carriers by USDOT and MC. Any group with >1 entry has duplicates.
+    // Keep the most complete record; delete the rest.
+    const byUsdot = new Map<string, any[]>();
+    const byMc = new Map<string, any[]>();
+    for (const c of carriers) {
+      const u = (c.usdot_number || "").trim();
+      const m = (c.mc_number || "").trim();
+      if (u) {
+        if (!byUsdot.has(u)) byUsdot.set(u, []);
+        byUsdot.get(u)!.push(c);
+      }
+      if (m) {
+        if (!byMc.has(m)) byMc.set(m, []);
+        byMc.get(m)!.push(c);
+      }
+    }
+
+    const duplicateIds = new Set<string>();
+    const findDuplicates = (groups: Map<string, any[]>) => {
+      for (const [, group] of groups) {
+        if (group.length < 2) continue;
+        // Sort by completeness desc, then by created_date asc (keep oldest if tied)
+        group.sort((a, b) => {
+          const sc = completenessScore(b) - completenessScore(a);
+          if (sc !== 0) return sc;
+          return (a.created_date || "").localeCompare(b.created_date || "");
+        });
+        // Keep the first (most complete), mark the rest as duplicates
+        for (let i = 1; i < group.length; i++) {
+          duplicateIds.add(group[i].id);
+        }
+      }
+    };
+    findDuplicates(byUsdot);
+    findDuplicates(byMc);
+
+    for (const dupId of duplicateIds) {
+      if (removedCount >= maxDeletions) break;
+      const dupCarrier = carriers.find((c) => c.id === dupId);
+      await deleteCarrierAndRelated(base44, dupId);
+      removedCount++;
+      duplicatesRemoved++;
+      removedCarriers.push({
+        id: dupId,
+        legal_name: dupCarrier?.legal_name || "",
+        usdot: dupCarrier?.usdot_number || "",
+        mc: dupCarrier?.mc_number || "",
+        operating_status: "DUPLICATE — removed",
+      });
+      await base44.entities.ActivityLog.create({
+        action: "Duplicate carrier removed by audit",
+        details: `${dupCarrier?.legal_name || dupId} (USDOT: ${dupCarrier?.usdot_number || "—"}, MC: ${dupCarrier?.mc_number || "—"}) — duplicate of a more complete record`,
+        status: "Warning",
+        timestamp: now,
+      });
+    }
+
+    // ---- Phase 2: Authority status check + backfill ----
+    // Only process carriers that are NOT already marked as duplicates above.
     for (const carrier of carriers) {
+      if (duplicateIds.has(carrier.id)) continue;
       if (removedCount >= maxDeletions && workerCallsUsed >= maxWorkerChecks) break;
 
-      // A carrier with no USDOT and no MC cannot ever be verified against
-      // FMCSA — remove it immediately (dummy/test records fall here).
+      // No USDOT and no MC — unverifiable, remove
       if (!carrier.usdot_number && !carrier.mc_number) {
         if (removedCount >= maxDeletions) continue;
         await deleteCarrierAndRelated(base44, carrier.id);
@@ -76,133 +137,105 @@ export default async function(req: Request): Promise<Response> {
 
       const opStatus = (carrier.operating_status || "").trim();
 
-      if (opStatus) {
-        // Already have operating status stored — check immediately.
-        // Only remove carriers that are EXPLICITLY unauthorized ("NOT AUTHORIZED"
-        // or "OUT-OF-SERVICE"). Carriers with ambiguous values like "ACTIVE"
-        // (which is the USDOT Status, not the Operating Authority Status) are
-        // skipped — they need a worker re-check to get the real authority status.
-        if (isExplicitlyUnauthorized(opStatus)) {
+      if (opStatus && isExplicitlyUnauthorized(opStatus)) {
+        // Stored status is explicitly unauthorized — remove immediately
+        if (removedCount >= maxDeletions) continue;
+        await deleteCarrierAndRelated(base44, carrier.id);
+        checkedFromStored++;
+        removedCount++;
+        removedCarriers.push({
+          id: carrier.id,
+          legal_name: carrier.legal_name || "",
+          usdot: carrier.usdot_number || "",
+          mc: carrier.mc_number || "",
+          operating_status: opStatus,
+        });
+        await base44.entities.ActivityLog.create({
+          action: "Carrier removed by authority audit (stored status)",
+          details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${opStatus}`,
+          status: "Warning",
+          timestamp: now,
+        });
+        continue;
+      }
+
+      if (opStatus && isAuthorizedStatus(opStatus)) {
+        // Already authorized — no worker call needed
+        checkedFromStored++;
+        keptCount++;
+        continue;
+      }
+
+      // Status is missing or ambiguous (e.g. "ACTIVE") — need worker to verify.
+      // Request the full snapshot so we can ALSO backfill missing fields.
+      if (!workerUrl || workerCallsUsed >= maxWorkerChecks) continue;
+
+      workerCallsUsed++;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (apiKey) headers["x-worker-api-key"] = apiKey;
+
+      try {
+        const workerRes = await fetch(`${workerUrl.replace(/\/$/, "")}/research`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            usdot: carrier.usdot_number,
+            mc: carrier.mc_number,
+            steps: ["company_snapshot", "operation_status", "sms_overview", "complete_sms", "carrier_history", "registration", "licensing_insurance", "inspections_crashes", "safety_rating"],
+          }),
+        });
+
+        if (!workerRes.ok) continue;
+        const data: any = await workerRes.json();
+        checkedFromWorker++;
+
+        const liveStatus = data?.safer?.operating_status || data?.operation_status?.operating_status || "";
+
+        if (isExplicitlyUnauthorized(liveStatus) || isCarrierNotFound(data)) {
           if (removedCount >= maxDeletions) continue;
           await deleteCarrierAndRelated(base44, carrier.id);
-          checkedFromStored++;
           removedCount++;
           removedCarriers.push({
             id: carrier.id,
-            legal_name: carrier.legal_name || "",
+            legal_name: carrier.legal_name || data?.carrier?.legal_name || "",
             usdot: carrier.usdot_number || "",
             mc: carrier.mc_number || "",
-            operating_status: opStatus,
+            operating_status: liveStatus || "NOT FOUND ON FMCSA",
           });
           await base44.entities.ActivityLog.create({
-            action: "Carrier removed by authority audit (stored status)",
-            details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${opStatus}`,
+            action: "Carrier removed by authority audit (worker check)",
+            details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus || "not found"}`,
             status: "Warning",
             timestamp: now,
           });
-        } else if (isAuthorizedStatus(opStatus)) {
-          checkedFromStored++;
+        } else if (isAuthorizedStatus(liveStatus) || (data.success && data.carrier?.legal_name)) {
+          // Authorized — backfill any missing fields from the worker snapshot
           keptCount++;
-        } else {
-          // Ambiguous status (e.g. "ACTIVE") — treat as unchecked, needs worker
-          checkedFromStored++;
-          // Don't count as kept or removed — fall through to worker check below
-          if (!workerUrl || workerCallsUsed >= maxWorkerChecks) continue;
-          workerCallsUsed++;
-          const headers: Record<string, string> = { "Content-Type": "application/json" };
-          if (apiKey) headers["x-worker-api-key"] = apiKey;
-          try {
-            const workerRes = await fetch(`${workerUrl.replace(/\/$/, "")}/research`, {
-              method: "POST",
-              headers,
-              body: JSON.stringify({
-                usdot: carrier.usdot_number,
-                mc: carrier.mc_number,
-                steps: ["company_snapshot", "operation_status"],
-              }),
-            });
-            if (!workerRes.ok) continue;
-            const data: any = await workerRes.json();
-            checkedFromWorker++;
-            const liveStatus = data?.safer?.operating_status || data?.operation_status?.operating_status || "";
-            if (isExplicitlyUnauthorized(liveStatus) || isCarrierNotFound(data)) {
-              if (removedCount >= maxDeletions) continue;
-              await deleteCarrierAndRelated(base44, carrier.id);
-              removedCount++;
-              removedCarriers.push({
-                id: carrier.id,
-                legal_name: carrier.legal_name || data?.carrier?.legal_name || "",
-                usdot: carrier.usdot_number || "",
-                mc: carrier.mc_number || "",
-                operating_status: liveStatus || "NOT FOUND ON FMCSA",
-              });
-              await base44.entities.ActivityLog.create({
-                action: "Carrier removed by authority audit (worker re-check)",
-                details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus || "not found"}`,
-                status: "Warning",
-                timestamp: now,
-              });
-            } else if (isAuthorizedStatus(liveStatus)) {
-              keptCount++;
-              await base44.entities.Carrier.update(carrier.id, { operating_status: liveStatus });
-            }
-          } catch {
-            // Worker call failed — skip this carrier for now
-          }
-        }
-      } else {
-        // No stored operating status — need the worker to fetch the snapshot
-        if (!workerUrl || workerCallsUsed >= maxWorkerChecks) continue;
-
-        workerCallsUsed++;
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (apiKey) headers["x-worker-api-key"] = apiKey;
-
-        try {
-          const workerRes = await fetch(`${workerUrl.replace(/\/$/, "")}/research`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              usdot: carrier.usdot_number,
-              mc: carrier.mc_number,
-              steps: ["company_snapshot", "operation_status"],
-            }),
-          });
-
-          if (!workerRes.ok) continue;
-          const data: any = await workerRes.json();
-          checkedFromWorker++;
-
-          const liveStatus = data?.safer?.operating_status || data?.operation_status?.operating_status || "";
-          if (isExplicitlyUnauthorized(liveStatus) || isCarrierNotFound(data)) {
-            await deleteCarrierAndRelated(base44, carrier.id);
-            removedCount++;
-            removedCarriers.push({
-              id: carrier.id,
-              legal_name: carrier.legal_name || data?.carrier?.legal_name || "",
-              usdot: carrier.usdot_number || "",
-              mc: carrier.mc_number || "",
-              operating_status: liveStatus || "NOT FOUND ON FMCSA",
-            });
+          const mapped = mapWorkerDataToCarrierFields(data);
+          const backfill = buildBackfillUpdate(carrier, mapped);
+          // Always update operating_status so we don't re-check next time
+          backfill.operating_status = liveStatus || carrier.operating_status;
+          backfill.last_researched_at = now;
+          if (Object.keys(backfill).length > 1) {
+            backfilledCount++;
+            await base44.entities.Carrier.update(carrier.id, backfill);
             await base44.entities.ActivityLog.create({
-              action: "Carrier removed by authority audit (worker check)",
-              details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: ${liveStatus || "not found"}`,
-              status: "Warning",
+              action: "Carrier backfilled by audit",
+              details: `${carrier.legal_name || carrier.usdot_number || carrier.id}: filled ${Object.keys(backfill).length - 1} missing fields from FMCSA snapshot`,
+              status: "Success",
               timestamp: now,
             });
-          } else if (isAuthorizedStatus(liveStatus)) {
-            // Update stored operating_status so we don't re-check next time
-            keptCount++;
+          } else {
             await base44.entities.Carrier.update(carrier.id, { operating_status: liveStatus });
           }
-        } catch {
-          // Worker call failed — skip this carrier for now
         }
+      } catch {
+        // Worker call failed — skip this carrier for now
       }
     }
 
     const processed = checkedFromStored + checkedFromWorker;
-    const remainingUnchecked = carriers.length - processed;
+    const remainingUnchecked = carriers.length - processed - duplicatesRemoved;
 
     return Response.json({
       success: true,
@@ -210,6 +243,8 @@ export default async function(req: Request): Promise<Response> {
       checked_from_stored: checkedFromStored,
       checked_from_worker: checkedFromWorker,
       removed: removedCount,
+      duplicates_removed: duplicatesRemoved,
+      backfilled: backfilledCount,
       kept: keptCount,
       worker_calls_used: workerCallsUsed,
       remaining_unchecked: remainingUnchecked,

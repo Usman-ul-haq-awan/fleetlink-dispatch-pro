@@ -8,7 +8,7 @@ import { base44 } from "@/api/base44Client";
 
 let state = {
   running: false,
-  progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" },
+  progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, duplicatesRemoved: 0, backfilled: 0, remaining: 0, current: "" },
   removedCarriers: [],
 };
 let stopRequested = false;
@@ -94,9 +94,11 @@ export async function startAudit() {
           kept: state.progress.kept + (d.kept || 0),
           workerChecks: state.progress.workerChecks + (d.checked_from_worker || 0),
           storedChecks: state.progress.storedChecks + (d.checked_from_stored || 0),
+          duplicatesRemoved: state.progress.duplicatesRemoved + (d.duplicates_removed || 0),
+          backfilled: state.progress.backfilled + (d.backfilled || 0),
           remaining: d.remaining_unchecked || 0,
           current: d.remaining_unchecked > 0
-            ? `Round ${rounds}: ${d.removed || 0} removed, ${d.remaining_unchecked} still unchecked...`
+            ? `Round ${rounds}: ${d.removed || 0} removed, ${d.duplicates_removed || 0} dupes, ${d.backfilled || 0} backfilled, ${d.remaining_unchecked} left...`
             : "Audit complete",
         },
       });
