@@ -1,0 +1,45 @@
+{
+  "name": "Scheduled Research",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "scheduled_research",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_batch": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "runResearchBatch",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Research carrier batch",
+            "description": "Process up to 3 imported carriers"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Automatically researches imported carriers through the browser worker every 5 minutes, independent of any browser or laptop being open.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "Asia/Karachi",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  }
+}
