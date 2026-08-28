@@ -24,9 +24,8 @@ export default function CarrierResearch() {
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
   const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
-  const [serverResearch, setServerResearch] = useState({ running: false, result: null });
-  const [serverDiscovery, setServerDiscovery] = useState({ running: false, progress: null, result: null });
-  const serverDiscoveryStop = useRef(false);
+  const [serverResearch, setServerResearch] = useState({ running: false, progress: null, result: null });
+  const serverResearchStop = useRef(false);
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -192,46 +191,20 @@ export default function CarrierResearch() {
   const startAutoResearch = () => startRunnerAutoResearch(selectedSteps);
   const stopAutoResearch = () => stopRunnerAutoResearch();
 
-  // Server-side research — runs on the Base44 server, so it keeps going
-  // through app updates, hot reloads, and browser navigation.
-  const runServerResearch = async () => {
-    setServerResearch({ running: true, result: null });
-    try {
-      const res = await base44.functions.invoke("runAutoResearch", { batch_size: 12 });
-      setServerResearch({ running: false, result: res.data });
-      load();
-      // If carriers remain, keep going automatically.
-      if (res.data?.remaining > 0) {
-        setTimeout(runServerResearch, 2000);
-      }
-    } catch (err) {
-      setServerResearch({ running: false, result: { error: err.response?.data?.error || err.message } });
-    }
-  };
-
-  // MC-number discovery runs in a module-level background runner so it keeps
-  // working even when the user navigates away from this page.
-  const startDiscovery = () => startRunnerDiscovery(discoverTarget);
-  const startDiscoveryFromMc = () => {
-    const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
-    if (!mc || isNaN(mc)) return;
-    startRunnerDiscovery(discoverTarget, mc);
-  };
-  const stopDiscovery = () => stopRunnerDiscovery();
-
-  // Server-side MC discovery — runs on the Base44 server, survives app updates.
-  // Uses the same target + start-MC inputs as the browser discovery runner.
-  const runServerDiscovery = async (startMc, nextMc) => {
-    if (serverDiscoveryStop.current) return;
-    setServerDiscovery((prev) => ({ running: true, progress: prev.progress, result: null }));
+  // Server-side research — runs on the Base44 server (survives app updates &
+  // navigation). Picks up the "Start from MC" value entered in the MC Number
+  // Discovery box above and discovers/researches carriers starting from that MC.
+  const runServerResearch = async (startMc, nextMc) => {
+    if (serverResearchStop.current) return;
+    setServerResearch((prev) => ({ running: true, progress: prev.progress, result: null }));
     try {
       const res = await base44.functions.invoke("runAutoDiscovery", {
-        batch_size: 8,
+        batch_size: 10,
         target_count: discoverTarget,
         start_mc: startMc ?? (nextMc ?? null),
       });
       const data = res.data;
-      setServerDiscovery((prev) => {
+      setServerResearch((prev) => {
         const prog = prev.progress || { found: 0, failed: 0, currentMc: startMc ?? data.next_mc, totalCarriers: 0 };
         return {
           running: false,
@@ -246,27 +219,37 @@ export default function CarrierResearch() {
       });
       load();
       // Auto-continue until the target is reached or stopped.
-      if (!data.target_reached && !serverDiscoveryStop.current) {
-        setTimeout(() => runServerDiscovery(null, data.next_mc), 1500);
+      if (!data.target_reached && !serverResearchStop.current) {
+        setTimeout(() => runServerResearch(null, data.next_mc), 1500);
       } else if (data.target_reached) {
-        setServerDiscovery((prev) => ({ ...prev, running: false, result: { ...data, message: "Target carrier count reached." } }));
+        setServerResearch((prev) => ({ ...prev, running: false, result: { ...data, message: "Target carrier count reached." } }));
       }
     } catch (err) {
-      setServerDiscovery((prev) => ({ running: false, progress: prev.progress, result: { error: err.response?.data?.error || err.message } }));
+      setServerResearch((prev) => ({ running: false, progress: prev.progress, result: { error: err.response?.data?.error || err.message } }));
     }
   };
 
-  const startServerDiscovery = () => {
+  const startServerResearch = () => {
     const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
-    serverDiscoveryStop.current = false;
-    setServerDiscovery({ running: true, progress: { found: 0, failed: 0, currentMc: mc || 0, totalCarriers: 0 }, result: null });
-    runServerDiscovery(mc || null, null);
+    serverResearchStop.current = false;
+    setServerResearch({ running: true, progress: { found: 0, failed: 0, currentMc: mc || 0, totalCarriers: 0 }, result: null });
+    runServerResearch(mc || null, null);
   };
 
-  const stopServerDiscovery = () => {
-    serverDiscoveryStop.current = true;
-    setServerDiscovery((prev) => ({ ...prev, running: false, result: { ...prev.result, message: "Stopped — no further batches will run." } }));
+  const stopServerResearch = () => {
+    serverResearchStop.current = true;
+    setServerResearch((prev) => ({ ...prev, running: false, result: { ...prev.result, message: "Stopped — no further batches will run." } }));
   };
+
+  // MC-number discovery runs in a module-level background runner so it keeps
+  // working even when the user navigates away from this page.
+  const startDiscovery = () => startRunnerDiscovery(discoverTarget);
+  const startDiscoveryFromMc = () => {
+    const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
+    if (!mc || isNaN(mc)) return;
+    startRunnerDiscovery(discoverTarget, mc);
+  };
+  const stopDiscovery = () => stopRunnerDiscovery();
 
   const runAudit = () => startRunnerAudit();
   const stopAudit = () => stopRunnerAudit();
@@ -292,11 +275,19 @@ export default function CarrierResearch() {
               Stop Scraping
             </button>
           )}
-          <button onClick={runServerResearch} disabled={serverResearch.running || processing || autoResearch.running || carriers.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
-            {serverResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
-            {serverResearch.running ? "Server Researching..." : "Server-Side Research"}
-          </button>
+          {!serverResearch.running ? (
+            <button onClick={startServerResearch} disabled={processing || autoResearch.running || discovery.running}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+              <Server className="w-4 h-4" />
+              {discoverStartMc ? `Server from MC-${discoverStartMc}` : "Server-Side Research"}
+            </button>
+          ) : (
+            <button onClick={stopServerResearch}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
+              <AlertCircle className="w-4 h-4" />
+              Stop Server
+            </button>
+          )}
           <button onClick={processBatch} disabled={processing || autoResearch.running || carriers.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
             {processing && !autoResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
@@ -352,26 +343,7 @@ export default function CarrierResearch() {
             <Play className="w-4 h-4" />
             Research from MC
           </button>
-          <p className="text-xs text-slate-400 w-full">Starts at the MC number you enter and continues +1 until the target count is reached.</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap pt-3 mt-3 border-t border-slate-200">
-          <span className="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
-            <Server className="w-3.5 h-3.5" /> Server-Side Discovery
-          </span>
-          <span className="text-xs text-slate-400">— runs on the server, survives app updates</span>
-          {!serverDiscovery.running ? (
-            <button onClick={startServerDiscovery} disabled={discovery.running}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 ml-auto">
-              <Server className="w-4 h-4" />
-              {discoverStartMc ? `Start from MC-${discoverStartMc}` : "Start Server Discovery"}
-            </button>
-          ) : (
-            <button onClick={stopServerDiscovery}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 ml-auto">
-              <AlertCircle className="w-4 h-4" />
-              Stop Server Discovery
-            </button>
-          )}
+          <p className="text-xs text-slate-400 w-full">Starts at the MC number you enter and continues +1 until the target count is reached. The "Server from MC" button above uses this same value.</p>
         </div>
       </div>
 
@@ -447,28 +419,7 @@ export default function CarrierResearch() {
         </div>
       )}
 
-      {(serverDiscovery.running || serverDiscovery.progress) && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-emerald-800 flex items-center gap-2">
-              {serverDiscovery.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
-              {serverDiscovery.running
-                ? `Server discovery — next MC-${serverDiscovery.progress?.currentMc || "…"}`
-                : (serverDiscovery.result?.message || "Server discovery idle")}
-            </span>
-            <span className="text-sm text-emerald-600">
-              {serverDiscovery.progress?.found || 0} found · {serverDiscovery.progress?.failed || 0} failed
-              {serverDiscovery.progress?.totalCarriers != null && ` · ${serverDiscovery.progress.totalCarriers} total`}
-            </span>
-          </div>
-          <p className="text-xs text-emerald-700 mt-1">
-            Runs on the Base44 server — keeps going through app updates and browser navigation.
-          </p>
-          {serverDiscovery.result?.error && (
-            <p className="text-xs text-red-600 mt-1">{serverDiscovery.result.error}</p>
-          )}
-        </div>
-      )}
+
 
       {processing && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
@@ -497,33 +448,26 @@ export default function CarrierResearch() {
         </div>
       )}
 
-      {serverResearch.running && (
+      {(serverResearch.running || serverResearch.progress) && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-            <span className="text-sm font-medium text-emerald-800">Server-side research in progress — runs on the server, survives app updates.</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-emerald-800 flex items-center gap-2">
+              {serverResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
+              {serverResearch.running
+                ? `Server research — next MC-${serverResearch.progress?.currentMc || "…"}`
+                : (serverResearch.result?.message || "Server research idle")}
+            </span>
+            <span className="text-sm text-emerald-600">
+              {serverResearch.progress?.found || 0} found · {serverResearch.progress?.failed || 0} failed
+              {serverResearch.progress?.totalCarriers != null && ` · ${serverResearch.progress.totalCarriers} total`}
+            </span>
           </div>
-        </div>
-      )}
-      {serverResearch.result && !serverResearch.result.error && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4 flex items-start gap-3">
-          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-emerald-800">
-              Server batch complete — {serverResearch.result.succeeded || 0} succeeded, {serverResearch.result.failed || 0} failed
-            </p>
-            <p className="text-emerald-700 text-xs mt-1">
-              {serverResearch.result.remaining > 0
-                ? `${serverResearch.result.remaining} imported carriers remaining — next batch starting automatically.`
-                : "No imported carriers remaining."}
-            </p>
-          </div>
-        </div>
-      )}
-      {serverResearch.result?.error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <p className="text-sm text-red-700">{serverResearch.result.error}</p>
+          <p className="text-xs text-emerald-700 mt-1">
+            Runs on the Base44 server — keeps going through app updates and browser navigation.
+          </p>
+          {serverResearch.result?.error && (
+            <p className="text-xs text-red-600 mt-1">{serverResearch.result.error}</p>
+          )}
         </div>
       )}
 
