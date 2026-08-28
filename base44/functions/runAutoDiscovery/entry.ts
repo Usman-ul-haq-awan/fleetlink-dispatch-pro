@@ -68,13 +68,17 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ success: true, skipped: true, message: "Discovery engine is stopped." });
     }
 
+    // target_count = how many NEW carriers to discover this run (not a DB total).
     const targetCount = Math.max(
       1,
       parseInt(body?.target_count, 10) || parseInt((await getSetting(svc, "discovery_target_count")) || "", 10) || DEFAULT_TARGET
     );
-    const storedStartMc = parseInt((await getSetting(svc, "discovery_start_mc")) || "", 10);
-    const bodyStartMc = body?.start_mc ? parseInt(body.start_mc, 10) : null;
-    const requestedStartMc = bodyStartMc && !isNaN(bodyStartMc) ? bodyStartMc : (isNaN(storedStartMc) ? null : storedStartMc);
+    // Persistent progress: new carriers found so far in this run.
+    const foundStart = Math.max(0, parseInt((await getSetting(svc, "discovery_found_count")) || "", 10) || 0);
+    // Persistent cursor: next MC to try. Set on start; advanced each call so
+    // we never re-check MC numbers that already failed.
+    const cursorRaw = await getSetting(svc, "discovery_cursor");
+    const cursor = cursorRaw ? parseInt(cursorRaw, 10) : NaN;
 
     // Determine starting MC.
     let currentMc: number;
@@ -93,10 +97,9 @@ export default async function(req: Request): Promise<Response> {
         skip += pageLimit;
       }
     }
-    // If a start MC was requested AND it's ahead of the current DB max, jump
-    // there. Otherwise continue from the DB max (auto-resume).
-    if (requestedStartMc && !isNaN(requestedStartMc) && requestedStartMc > maxMc) {
-      currentMc = requestedStartMc - 1; // loop pre-increments
+    // Resume from the cursor if set; otherwise continue from the DB max.
+    if (!isNaN(cursor) && cursor > 0) {
+      currentMc = cursor - 1; // loop pre-increments
     } else {
       currentMc = maxMc;
     }
@@ -120,7 +123,7 @@ export default async function(req: Request): Promise<Response> {
       }
     }
 
-    while (attempted < batchSize && totalCarriers < targetCount) {
+    while (attempted < batchSize && (foundStart + found) < targetCount) {
       currentMc += 1;
       lastMc = currentMc;
       const mcStr = String(currentMc);
@@ -174,11 +177,16 @@ export default async function(req: Request): Promise<Response> {
       }
     }
 
-    const targetReached = totalCarriers >= targetCount;
-    // Auto-disable when the target is reached so the scheduled workflow stops
-    // doing work until the user explicitly starts it again.
+    const totalFound = foundStart + found;
+    const targetReached = totalFound >= targetCount;
+    // Persist progress + cursor so the next scheduled call continues cleanly.
+    await setSetting(svc, "discovery_found_count", String(totalFound), "batch", "number", "New carriers found in the current discovery run");
+    await setSetting(svc, "discovery_cursor", String(lastMc + 1), "batch", "number", "Next MC number to try for discovery");
+    // Auto-disable when the target is reached; reset progress for next run.
     if (targetReached) {
       await setSetting(svc, "discovery_enabled", "false", "batch", "boolean", "Server-side discovery engine running state");
+      await setSetting(svc, "discovery_found_count", "0", "batch", "number", "New carriers found in the current discovery run");
+      await setSetting(svc, "discovery_cursor", "", "batch", "number", "Next MC number to try for discovery");
     }
 
     return Response.json({
@@ -186,6 +194,7 @@ export default async function(req: Request): Promise<Response> {
       found,
       failed,
       attempted,
+      found_this_run: totalFound,
       next_mc: lastMc + 1,
       total_carriers: totalCarriers,
       target_count: targetCount,

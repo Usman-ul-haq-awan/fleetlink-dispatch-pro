@@ -24,7 +24,7 @@ export default function CarrierResearch() {
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
   const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
-  const [serverResearch, setServerResearch] = useState({ enabled: false, target: 200, startMc: null, lastResult: null, saving: false });
+  const [serverResearch, setServerResearch] = useState({ enabled: false, target: 200, startMc: null, foundCount: 0, lastResult: null, saving: false });
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -50,7 +50,9 @@ export default function CarrierResearch() {
       const target = tRows.length > 0 ? parseInt(tRows[0].setting_value, 10) || 200 : 200;
       const sRows = await base44.entities.AppSetting.filter({ setting_key: "discovery_start_mc" });
       const startMc = sRows.length > 0 ? (parseInt(sRows[0].setting_value, 10) || null) : null;
-      setServerResearch((prev) => ({ ...prev, enabled, target, startMc }));
+      const fRows = await base44.entities.AppSetting.filter({ setting_key: "discovery_found_count" });
+      const foundCount = fRows.length > 0 ? (parseInt(fRows[0].setting_value, 10) || 0) : 0;
+      setServerResearch((prev) => ({ ...prev, enabled, target, startMc, foundCount }));
       if (syncInputs) {
         setDiscoverTarget(target);
         setDiscoverStartMc(startMc ? String(startMc) : "");
@@ -233,13 +235,12 @@ export default function CarrierResearch() {
     try {
       await saveSetting("discovery_target_count", String(discoverTarget), "batch", "number", "Server-side discovery target carrier count");
       const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
-      if (mc && !isNaN(mc)) {
-        await saveSetting("discovery_start_mc", String(mc), "batch", "number", "Server-side discovery start MC");
-      } else {
-        await saveSetting("discovery_start_mc", "", "batch", "number", "Server-side discovery start MC");
-      }
+      const startMc = mc && !isNaN(mc) ? String(mc) : "";
+      await saveSetting("discovery_start_mc", startMc, "batch", "number", "Server-side discovery start MC");
+      await saveSetting("discovery_cursor", startMc, "batch", "number", "Next MC number to try for discovery");
+      await saveSetting("discovery_found_count", "0", "batch", "number", "New carriers found in the current discovery run");
       await saveSetting("discovery_enabled", "true", "batch", "boolean", "Server-side discovery engine running state");
-      setServerResearch((prev) => ({ ...prev, enabled: true, target: discoverTarget, startMc: mc || null, saving: false }));
+      setServerResearch((prev) => ({ ...prev, enabled: true, target: discoverTarget, startMc: mc || null, foundCount: 0, saving: false }));
     } catch (err) {
       setServerResearch((prev) => ({ ...prev, saving: false, lastResult: { error: err.message } }));
     }
@@ -470,12 +471,12 @@ export default function CarrierResearch() {
               Server-side discovery engine is running
             </span>
             <span className="text-sm text-emerald-600">
-              Target: {serverResearch.target || discoverTarget} carriers
+              {serverResearch.foundCount || 0} / {serverResearch.target || discoverTarget} discovered
               {serverResearch.startMc && ` · from MC-${serverResearch.startMc}`}
             </span>
           </div>
           <p className="text-xs text-emerald-700 mt-1">
-            Runs on the Base44 server every 5 minutes — keeps going through internet disconnections, app updates, and navigation. Auto-stops when the target carrier count is reached.
+            Runs on the Base44 server every 5 minutes — keeps going through internet disconnections, app updates, and navigation. Auto-stops when the target number of new carriers has been discovered.
           </p>
           {serverResearch.lastResult?.error && (
             <p className="text-xs text-red-600 mt-1">{serverResearch.lastResult.error}</p>
