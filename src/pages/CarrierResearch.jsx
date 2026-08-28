@@ -25,6 +25,8 @@ export default function CarrierResearch() {
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
   const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
   const [serverResearch, setServerResearch] = useState({ running: false, result: null });
+  const [serverDiscovery, setServerDiscovery] = useState({ running: false, progress: null, result: null });
+  const serverDiscoveryStop = useRef(false);
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -217,6 +219,55 @@ export default function CarrierResearch() {
   };
   const stopDiscovery = () => stopRunnerDiscovery();
 
+  // Server-side MC discovery — runs on the Base44 server, survives app updates.
+  // Uses the same target + start-MC inputs as the browser discovery runner.
+  const runServerDiscovery = async (startMc, nextMc) => {
+    if (serverDiscoveryStop.current) return;
+    setServerDiscovery((prev) => ({ running: true, progress: prev.progress, result: null }));
+    try {
+      const res = await base44.functions.invoke("runAutoDiscovery", {
+        batch_size: 8,
+        target_count: discoverTarget,
+        start_mc: startMc ?? (nextMc ?? null),
+      });
+      const data = res.data;
+      setServerDiscovery((prev) => {
+        const prog = prev.progress || { found: 0, failed: 0, currentMc: startMc ?? data.next_mc, totalCarriers: 0 };
+        return {
+          running: false,
+          progress: {
+            found: prog.found + (data.found || 0),
+            failed: prog.failed + (data.failed || 0),
+            currentMc: data.next_mc,
+            totalCarriers: data.total_carriers,
+          },
+          result: data,
+        };
+      });
+      load();
+      // Auto-continue until the target is reached or stopped.
+      if (!data.target_reached && !serverDiscoveryStop.current) {
+        setTimeout(() => runServerDiscovery(null, data.next_mc), 1500);
+      } else if (data.target_reached) {
+        setServerDiscovery((prev) => ({ ...prev, running: false, result: { ...data, message: "Target carrier count reached." } }));
+      }
+    } catch (err) {
+      setServerDiscovery((prev) => ({ running: false, progress: prev.progress, result: { error: err.response?.data?.error || err.message } }));
+    }
+  };
+
+  const startServerDiscovery = () => {
+    const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
+    serverDiscoveryStop.current = false;
+    setServerDiscovery({ running: true, progress: { found: 0, failed: 0, currentMc: mc || 0, totalCarriers: 0 }, result: null });
+    runServerDiscovery(mc || null, null);
+  };
+
+  const stopServerDiscovery = () => {
+    serverDiscoveryStop.current = true;
+    setServerDiscovery((prev) => ({ ...prev, running: false, result: { ...prev.result, message: "Stopped — no further batches will run." } }));
+  };
+
   const runAudit = () => startRunnerAudit();
   const stopAudit = () => stopRunnerAudit();
 
@@ -303,6 +354,25 @@ export default function CarrierResearch() {
           </button>
           <p className="text-xs text-slate-400 w-full">Starts at the MC number you enter and continues +1 until the target count is reached.</p>
         </div>
+        <div className="flex items-center gap-2 flex-wrap pt-3 mt-3 border-t border-slate-200">
+          <span className="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
+            <Server className="w-3.5 h-3.5" /> Server-Side Discovery
+          </span>
+          <span className="text-xs text-slate-400">— runs on the server, survives app updates</span>
+          {!serverDiscovery.running ? (
+            <button onClick={startServerDiscovery} disabled={discovery.running}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 ml-auto">
+              <Server className="w-4 h-4" />
+              {discoverStartMc ? `Start from MC-${discoverStartMc}` : "Start Server Discovery"}
+            </button>
+          ) : (
+            <button onClick={stopServerDiscovery}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 ml-auto">
+              <AlertCircle className="w-4 h-4" />
+              Stop Server Discovery
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
@@ -374,6 +444,29 @@ export default function CarrierResearch() {
             <div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${discovery.progress.total ? (discovery.progress.done + discovery.progress.failed) / discovery.progress.total * 100 : 0}%` }} />
           </div>
           <p className="text-xs text-emerald-700 mt-2">Running in the background — you can navigate to other pages and this will keep going.</p>
+        </div>
+      )}
+
+      {(serverDiscovery.running || serverDiscovery.progress) && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-emerald-800 flex items-center gap-2">
+              {serverDiscovery.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
+              {serverDiscovery.running
+                ? `Server discovery — next MC-${serverDiscovery.progress?.currentMc || "…"}`
+                : (serverDiscovery.result?.message || "Server discovery idle")}
+            </span>
+            <span className="text-sm text-emerald-600">
+              {serverDiscovery.progress?.found || 0} found · {serverDiscovery.progress?.failed || 0} failed
+              {serverDiscovery.progress?.totalCarriers != null && ` · ${serverDiscovery.progress.totalCarriers} total`}
+            </span>
+          </div>
+          <p className="text-xs text-emerald-700 mt-1">
+            Runs on the Base44 server — keeps going through app updates and browser navigation.
+          </p>
+          {serverDiscovery.result?.error && (
+            <p className="text-xs text-red-600 mt-1">{serverDiscovery.result.error}</p>
+          )}
         </div>
       )}
 
