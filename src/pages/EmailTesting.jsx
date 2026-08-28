@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import {
   Send, Loader2, CheckCircle, AlertCircle, Mail, Zap, Clock,
-  RefreshCw, Truck, TrendingUp, Target, Play, Eye, Power, FileText
+  RefreshCw, Truck, TrendingUp, Target, Play, Eye, Power, FileText, Save
 } from "lucide-react";
 import { listAllCarriers } from "@/lib/paginatedList";
 
@@ -34,6 +34,10 @@ export default function EmailTesting() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewSeq, setPreviewSeq] = useState("seq_1");
   const [previewStep, setPreviewStep] = useState(0);
+  const [ccEmail, setCcEmail] = useState("tycoon.tours.business@gmail.com");
+  const [ccInput, setCcInput] = useState("tycoon.tours.business@gmail.com");
+  const [savingCc, setSavingCc] = useState(false);
+  const [previewMode, setPreviewMode] = useState("template"); // "template" | "last_sent"
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,6 +110,41 @@ export default function EmailTesting() {
       .catch(() => setEngineEnabled(true));
   }, []);
 
+  // Load CC email setting
+  useEffect(() => {
+    base44.entities.AppSetting.filter({ setting_key: "email_cc_address" })
+      .then((rows) => {
+        if (rows.length > 0 && rows[0].setting_value) {
+          setCcEmail(rows[0].setting_value);
+          setCcInput(rows[0].setting_value);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const saveCcEmail = async () => {
+    setSavingCc(true);
+    try {
+      const rows = await base44.entities.AppSetting.filter({ setting_key: "email_cc_address" });
+      if (rows.length > 0) {
+        await base44.entities.AppSetting.update(rows[0].id, { setting_value: ccInput });
+      } else {
+        await base44.entities.AppSetting.create({
+          setting_key: "email_cc_address",
+          setting_value: ccInput,
+          setting_category: "email",
+          setting_type: "string",
+          description: "CC email for all outbound emails",
+        });
+      }
+      setCcEmail(ccInput);
+    } catch (err) {
+      alert("Save failed: " + err.message);
+    } finally {
+      setSavingCc(false);
+    }
+  };
+
   const toggleEngine = async () => {
     setTogglingEngine(true);
     try {
@@ -133,6 +172,7 @@ export default function EmailTesting() {
   // Load email format preview
   const loadPreview = useCallback(async () => {
     setPreviewLoading(true);
+    setPreviewMode("template");
     try {
       const res = await base44.functions.invoke("previewEmailFormat", {
         sequence_id: previewSeq,
@@ -154,6 +194,10 @@ export default function EmailTesting() {
     try {
       const res = await base44.functions.invoke("runEmailBatch", {});
       setRunResult(res.data);
+      if (res.data?.last_sent_html) {
+        setPreviewHtml(res.data.last_sent_html);
+        setPreviewMode("last_sent");
+      }
       load();
     } catch (err) {
       setRunResult({ error: err.response?.data?.error || err.message });
@@ -193,9 +237,17 @@ export default function EmailTesting() {
           <p className="text-slate-500 text-sm mt-1">
             Server-side automated outreach — runs daily at 9 AM even when your laptop is off
           </p>
-          <p className="text-xs text-slate-400 mt-1">
-            Every email is CC'd to <span className="font-medium text-slate-600">tycoon.tours.business@gmail.com</span>
-          </p>
+          <div className="flex items-center gap-2 mt-2">
+            <label className="text-xs text-slate-500 whitespace-nowrap">CC every email to:</label>
+            <input type="email" value={ccInput} onChange={e => setCcInput(e.target.value)}
+              className="flex-1 max-w-xs px-2 py-1 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="cc@example.com" />
+            <button onClick={saveCcEmail} disabled={savingCc || ccInput === ccEmail}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50">
+              {savingCc ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              {ccInput === ccEmail ? "Saved" : "Save"}
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={toggleEngine} disabled={togglingEngine}
@@ -416,13 +468,16 @@ export default function EmailTesting() {
           <h2 className="font-semibold text-slate-900 flex items-center gap-2">
             <FileText className="w-5 h-5 text-blue-600" />
             Email Format Preview
+            {previewMode === "last_sent" && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Last Sent Email</span>
+            )}
           </h2>
           <div className="flex items-center gap-2">
-            <select value={previewSeq} onChange={e => setPreviewSeq(e.target.value)}
+            <select value={previewSeq} onChange={e => { setPreviewSeq(e.target.value); setPreviewMode("template"); }}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
               {FUNNEL_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
-            <select value={previewStep} onChange={e => setPreviewStep(parseInt(e.target.value))}
+            <select value={previewStep} onChange={e => { setPreviewStep(parseInt(e.target.value)); setPreviewMode("template"); }}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value={0}>Step 1 — Initial</option>
               <option value={1}>Step 2 — Follow-up</option>
@@ -433,7 +488,7 @@ export default function EmailTesting() {
             <button onClick={loadPreview} disabled={previewLoading}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50">
               {previewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              Refresh
+              Show Template
             </button>
           </div>
         </div>
@@ -452,7 +507,9 @@ export default function EmailTesting() {
           )}
         </div>
         <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
-          This is the exact HTML format sent to carriers — with Tycoon Logistics logo, personalized body, and company footer. All emails CC tycoon.tours.business@gmail.com.
+          {previewMode === "last_sent"
+            ? "This is the exact email that was just sent to a carrier. All emails CC " + ccEmail + "."
+            : "This is the exact HTML format sent to carriers — with Tycoon Logistics logo, personalized body, and company footer. All emails CC " + ccEmail + "."}
         </div>
       </div>
 

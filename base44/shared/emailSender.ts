@@ -7,8 +7,9 @@ import { secrets } from "base44:runtime";
 // identity. The sender identity (from_email / from_name) is read from
 // AppSetting (setting_category: "smtp") so it stays configurable in
 // Settings → SMTP Email Server.
-// Every outbound email CCs this address so the owner always has a copy.
-const OWNER_CC_EMAIL = "tycoon.tours.business@gmail.com";
+// Default CC — overridden by the `email_cc_address` AppSetting (editable on
+// the Email Engine page). Every outbound email CCs this address.
+const DEFAULT_CC_EMAIL = "tycoon.tours.business@gmail.com";
 
 export async function sendEmail(
   base44: any,
@@ -35,6 +36,17 @@ export async function sendEmail(
   }
   const fromAddr = `${fromNameResolved} <${fromEmail}>`;
 
+  // Resolve CC: if caller provides one, use it; otherwise read from AppSetting
+  // (editable on the Email Engine page), falling back to the default.
+  let ccEmails = opts.cc || [];
+  if (ccEmails.length === 0) {
+    const ccSetting = await base44.entities.AppSetting.filter({ setting_key: "email_cc_address" });
+    const ccEmail = (ccSetting.length > 0 && ccSetting[0].setting_value)
+      ? ccSetting[0].setting_value
+      : DEFAULT_CC_EMAIL;
+    ccEmails = [ccEmail];
+  }
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -44,7 +56,7 @@ export async function sendEmail(
     body: JSON.stringify({
       from: fromAddr,
       to: [to],
-      cc: [OWNER_CC_EMAIL, ...(opts.cc || [])],
+      cc: ccEmails,
       subject,
       text: body || "",
       ...(html ? { html } : {}),

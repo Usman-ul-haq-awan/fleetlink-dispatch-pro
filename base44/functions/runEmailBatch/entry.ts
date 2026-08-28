@@ -92,10 +92,16 @@ export default async function(req: Request): Promise<Response> {
       });
     }
 
+    // Read CC email once (editable on the Email Engine page)
+    const ccRows = await svc.entities.AppSetting.filter({ setting_key: "email_cc_address" });
+    const ccEmail = (ccRows.length > 0 && ccRows[0].setting_value) ? ccRows[0].setting_value : "tycoon.tours.business@gmail.com";
+
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
     const assigned: string[] = [];
+    let lastSentHtml = "";
+    let lastSentSubject = "";
 
     for (const carrier of dueNow) {
       if (sent >= DAILY_CAP) break;
@@ -141,7 +147,11 @@ export default async function(req: Request): Promise<Response> {
           html: htmlBody,
           fromName: COMPANY_PROFILE.short_name,
           requireSmtp: true,
+          cc: [ccEmail],
         });
+
+        lastSentHtml = htmlBody;
+        lastSentSubject = subject;
 
         // Log the email
         await svc.entities.EmailLog.create({
@@ -209,6 +219,8 @@ export default async function(req: Request): Promise<Response> {
       assigned_count: assigned.length,
       assigned,
       errors: errors.slice(0, 10),
+      last_sent_html: lastSentHtml,
+      last_sent_subject: lastSentSubject,
     });
   } catch (error: any) {
     return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
