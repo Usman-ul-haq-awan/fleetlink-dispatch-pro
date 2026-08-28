@@ -6,6 +6,8 @@ import {
   UserCheck, ClipboardCheck, Download, Activity, Settings, LogOut,
   Truck, Send, Menu, X
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
+import ChatWithUs from "@/components/ChatWithUs";
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -91,6 +93,10 @@ export default function Layout() {
       </nav>
 
       <div className="px-5 py-3 border-t border-slate-700">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-slate-500">Notifications</span>
+          <NotificationBell dark />
+        </div>
         {user && (
           <div className="mb-2">
             <p className="text-sm text-white font-medium">{user.full_name || user.email}</p>
@@ -143,16 +149,19 @@ export default function Layout() {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1">
             <Truck className="w-5 h-5 text-blue-600" />
             <span className="font-semibold text-slate-900">Dispatch CRM</span>
           </div>
+          <NotificationBell />
         </div>
 
         <div className="flex-1 overflow-y-auto">
           <Outlet />
         </div>
       </main>
+
+      <ChatWithUs />
     </div>
   );
 }

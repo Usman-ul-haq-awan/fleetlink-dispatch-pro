@@ -1,0 +1,44 @@
+{
+  "name": "AppNotification",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "broadcast",
+        "support"
+      ],
+      "default": "broadcast",
+      "description": "broadcast = admin announcement to staff; support = staff message to admin"
+    },
+    "target_role": {
+      "type": "string",
+      "enum": [
+        "all",
+        "admin",
+        "user"
+      ],
+      "default": "all"
+    },
+    "from_user_id": {
+      "type": "string"
+    },
+    "from_user_name": {
+      "type": "string"
+    },
+    "read_by": {
+      "type": "string",
+      "description": "Comma-separated user IDs who have read this notification"
+    }
+  },
+  "required": [
+    "title",
+    "message"
+  ]
+}
