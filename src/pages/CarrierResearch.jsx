@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2, ShieldCheck } from "lucide-react";
+import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2, ShieldCheck, Server } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 import ResearchStepsSelector, { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
@@ -24,6 +24,7 @@ export default function CarrierResearch() {
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
   const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
+  const [serverResearch, setServerResearch] = useState({ running: false, result: null });
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -189,6 +190,23 @@ export default function CarrierResearch() {
   const startAutoResearch = () => startRunnerAutoResearch(selectedSteps);
   const stopAutoResearch = () => stopRunnerAutoResearch();
 
+  // Server-side research — runs on the Base44 server, so it keeps going
+  // through app updates, hot reloads, and browser navigation.
+  const runServerResearch = async () => {
+    setServerResearch({ running: true, result: null });
+    try {
+      const res = await base44.functions.invoke("runAutoResearch", { batch_size: 12 });
+      setServerResearch({ running: false, result: res.data });
+      load();
+      // If carriers remain, keep going automatically.
+      if (res.data?.remaining > 0) {
+        setTimeout(runServerResearch, 2000);
+      }
+    } catch (err) {
+      setServerResearch({ running: false, result: { error: err.response?.data?.error || err.message } });
+    }
+  };
+
   // MC-number discovery runs in a module-level background runner so it keeps
   // working even when the user navigates away from this page.
   const startDiscovery = () => startRunnerDiscovery(discoverTarget);
@@ -223,6 +241,11 @@ export default function CarrierResearch() {
               Stop Scraping
             </button>
           )}
+          <button onClick={runServerResearch} disabled={serverResearch.running || processing || autoResearch.running || carriers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+            {serverResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
+            {serverResearch.running ? "Server Researching..." : "Server-Side Research"}
+          </button>
           <button onClick={processBatch} disabled={processing || autoResearch.running || carriers.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
             {processing && !autoResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
@@ -378,6 +401,36 @@ export default function CarrierResearch() {
             <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${autoResearch.progress.total ? (autoResearch.progress.done + autoResearch.progress.failed) / autoResearch.progress.total * 100 : 0}%` }} />
           </div>
           <p className="text-xs text-green-700 mt-2">Running in the background — you can navigate to other pages and this will keep going.</p>
+        </div>
+      )}
+
+      {serverResearch.running && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-800">Server-side research in progress — runs on the server, survives app updates.</span>
+          </div>
+        </div>
+      )}
+      {serverResearch.result && !serverResearch.result.error && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+          <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-emerald-800">
+              Server batch complete — {serverResearch.result.succeeded || 0} succeeded, {serverResearch.result.failed || 0} failed
+            </p>
+            <p className="text-emerald-700 text-xs mt-1">
+              {serverResearch.result.remaining > 0
+                ? `${serverResearch.result.remaining} imported carriers remaining — next batch starting automatically.`
+                : "No imported carriers remaining."}
+            </p>
+          </div>
+        </div>
+      )}
+      {serverResearch.result?.error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <p className="text-sm text-red-700">{serverResearch.result.error}</p>
         </div>
       )}
 
