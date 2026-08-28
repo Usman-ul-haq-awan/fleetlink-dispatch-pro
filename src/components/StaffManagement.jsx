@@ -43,6 +43,35 @@ export default function StaffManagement() {
     await load();
   };
 
+  const handleApprove = async (staffMemberId, approved) => {
+    const updates = { approved };
+    if (approved) {
+      updates.login_code = String(Math.floor(1000 + Math.random() * 9000));
+    }
+    await base44.entities.StaffMember.update(staffMemberId, updates);
+    await load();
+  };
+
+  const handleRegenerateCode = async (staffMemberId) => {
+    const loginCode = String(Math.floor(1000 + Math.random() * 9000));
+    await base44.entities.StaffMember.update(staffMemberId, { login_code: loginCode });
+    await load();
+  };
+
+  const handleUpdatePhone = async (staffMemberId, phone) => {
+    await base44.entities.StaffMember.update(staffMemberId, { phone });
+    await load();
+  };
+
+  const handleUpdateId = async (staffMemberId, file) => {
+    const uploadRes = await base44.integrations.Core.UploadFile({ file });
+    await base44.entities.StaffMember.update(staffMemberId, {
+      identity_document_url: uploadRes.file_url,
+      identity_document_name: file.name,
+    });
+    await load();
+  };
+
   const handleDelete = async (userId, staffMemberId, email) => {
     if (!window.confirm(`Remove ${email} from the system? This deletes their account and staff record.`)) return;
     try {
@@ -69,6 +98,10 @@ export default function StaffManagement() {
           staffMembers={staffMembers}
           onRoleChange={handleRoleChange}
           onDelete={handleDelete}
+          onApprove={handleApprove}
+          onRegenerateCode={handleRegenerateCode}
+          onUpdatePhone={handleUpdatePhone}
+          onUpdateId={handleUpdateId}
           currentUserId={currentUser?.id}
         />
       )}

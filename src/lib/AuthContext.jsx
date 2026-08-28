@@ -94,6 +94,29 @@ export const AuthProvider = ({ children }) => {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
       const currentUser = await base44.auth.me();
+
+      // Session management: enforce browser-close logout. The auth token
+      // persists in localStorage, but a session flag lives in sessionStorage
+      // (cleared when the browser/tab closes). If the token is valid but no
+      // session flag exists and this isn't a fresh login, force logout so the
+      // user must re-authenticate every time they open the app.
+      const SESSION_KEY = 'fleetlink_session_authenticated';
+      const POST_LOGIN_KEY = 'fleetlink_post_login';
+      const sessionActive = sessionStorage.getItem(SESSION_KEY) === 'true';
+      const postLogin = sessionStorage.getItem(POST_LOGIN_KEY) === 'true';
+      if (postLogin) {
+        sessionStorage.removeItem(POST_LOGIN_KEY);
+      } else if (!sessionActive) {
+        // Browser was closed/reopened — clear the persisted token and require login.
+        try { localStorage.removeItem('base44_access_token'); } catch {}
+        try { localStorage.removeItem('token'); } catch {}
+        setUser(null);
+        setIsAuthenticated(false);
+        setIsLoadingAuth(false);
+        setAuthChecked(true);
+        return;
+      }
+
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);

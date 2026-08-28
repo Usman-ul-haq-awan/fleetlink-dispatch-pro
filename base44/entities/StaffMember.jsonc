@@ -39,6 +39,15 @@
       ],
       "default": "Invited"
     },
+    "approved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Admin approval required before the staff member can log in"
+    },
+    "login_code": {
+      "type": "string",
+      "description": "4-digit code the staff member must enter on every login"
+    },
     "notes": {
       "type": "string"
     },

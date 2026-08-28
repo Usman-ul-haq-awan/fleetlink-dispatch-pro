@@ -46,6 +46,7 @@ export default function Register() {
       if (result?.access_token) {
         base44.auth.setToken(result.access_token);
       }
+      sessionStorage.setItem("fleetlink_post_login", "true");
       window.location.href = safeReturnTo();
     } catch (err) {
       setError(err.message || "Invalid verification code");
@@ -68,6 +69,7 @@ export default function Register() {
   };
 
   const handleGoogle = () => {
+    sessionStorage.setItem("fleetlink_post_login", "true");
     base44.auth.loginWithProvider("google", safeReturnTo());
   };
 

@@ -20,7 +20,7 @@ import OnboardingPage from '@/pages/OnboardingPage';
 import ImportExport from '@/pages/ImportExport';
 import ActivityLog from '@/pages/ActivityLog';
 import Settings from '@/pages/Settings';
-import Layout from '@/components/Layout';
+import ProtectedLayout from '@/components/ProtectedLayout';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -52,7 +52,7 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Protected routes - require authentication */}
-      <Route element={isAuthenticated ? <Layout /> : <Navigate to="/login" replace />}>
+      <Route element={isAuthenticated ? <ProtectedLayout /> : <Navigate to="/login" replace />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/carriers" element={<CarrierDatabase />} />
         <Route path="/carriers/:id" element={<CarrierDetail />} />

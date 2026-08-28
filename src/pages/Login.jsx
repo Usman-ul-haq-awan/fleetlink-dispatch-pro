@@ -24,6 +24,7 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
+      sessionStorage.setItem("fleetlink_post_login", "true");
       window.location.href = returnTo;
     } catch (err) {
       setError(err.message || "Invalid email or password");
@@ -33,6 +34,7 @@ export default function Login() {
   };
 
   const handleGoogle = () => {
+    sessionStorage.setItem("fleetlink_post_login", "true");
     base44.auth.loginWithProvider("google", returnTo);
   };
 

@@ -29,6 +29,7 @@ export default function AddStaffForm({ onAdded }) {
         docName = identityFile.name;
       }
 
+      const loginCode = String(Math.floor(1000 + Math.random() * 9000));
       await base44.entities.StaffMember.create({
         full_name: fullName.trim(),
         email: email.trim().toLowerCase(),
@@ -37,6 +38,8 @@ export default function AddStaffForm({ onAdded }) {
         identity_document_url: docUrl,
         identity_document_name: docName,
         status: "Invited",
+        approved: false,
+        login_code: loginCode,
       });
 
       try {
