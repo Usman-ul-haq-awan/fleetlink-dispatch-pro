@@ -12,10 +12,11 @@
       "type": "string",
       "enum": [
         "broadcast",
-        "support"
+        "support",
+        "reply"
       ],
       "default": "broadcast",
-      "description": "broadcast = admin announcement to staff; support = staff message to admin"
+      "description": "broadcast = admin announcement to staff; support = staff message to admin; reply = admin reply to a specific staff member"
     },
     "target_role": {
       "type": "string",
@@ -25,6 +26,10 @@
         "user"
       ],
       "default": "all"
+    },
+    "target_user_id": {
+      "type": "string",
+      "description": "When set, only this specific user sees the notification (used for admin replies to staff)"
     },
     "from_user_id": {
       "type": "string"
