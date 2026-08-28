@@ -90,8 +90,19 @@ export default async function(req: Request): Promise<Response> {
         const page = await svc.entities.Carrier.list("-created_date", pageLimit, skip);
         if (!page || page.length === 0) break;
         page.forEach((c: any) => {
-          const num = parseInt(String(c.mc_number || "").replace(/[^0-9]/g, ""), 10);
-          if (!isNaN(num) && num > maxMc) maxMc = num;
+          const raw = String(c.mc_number || "");
+          // Prefer an explicit "MC-123456" token; fall back to pure digits only
+          // when the value is a reasonable MC range (<= 7 digits), so garbage
+          // like "88058862680226" or "FF-57191 MC-684565" can't poison the cursor.
+          const mcMatch = raw.match(/MC-?\s*(\d+)/i);
+          let num: number | null = null;
+          if (mcMatch) {
+            num = parseInt(mcMatch[1], 10);
+          } else {
+            const digits = raw.replace(/[^0-9]/g, "");
+            if (digits && digits.length <= 7) num = parseInt(digits, 10);
+          }
+          if (num !== null && !isNaN(num) && num > maxMc && num < 2000000) maxMc = num;
         });
         if (page.length < pageLimit) break;
         skip += pageLimit;
