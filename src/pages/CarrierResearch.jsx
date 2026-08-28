@@ -5,6 +5,7 @@ import ResearchStepsPanel from "@/components/ResearchStepsPanel";
 import ResearchStepsSelector, { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery, stopDiscovery as stopRunnerDiscovery, clearFailedMcs as clearRunnerFailedMcs } from "@/lib/discoveryRunner";
 import { subscribe as subscribeAudit, startAudit as startRunnerAudit, stopAudit as stopRunnerAudit } from "@/lib/auditRunner";
+import { subscribe as subscribeAutoResearch, startAutoResearch as startRunnerAutoResearch, stopAutoResearch as stopRunnerAutoResearch } from "@/lib/autoResearchRunner";
 import { listAllCarriers } from "@/lib/paginatedList";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
@@ -16,14 +17,13 @@ export default function CarrierResearch() {
   const [progress, setProgress] = useState({ total: 0, done: 0, failed: 0, current: "" });
   const [errors, setErrors] = useState([]);
   const [activeResearch, setActiveResearch] = useState(null);
-  const [autoRunning, setAutoRunning] = useState(false);
   const [discoverTarget, setDiscoverTarget] = useState(200);
   const [discoverStartMc, setDiscoverStartMc] = useState("");
   const [selectedSteps, setSelectedSteps] = useState(ALL_STEP_KEYS);
-  const stopRef = useRef(false);
   const [failedMcs, setFailedMcs] = useState([]);
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
+  const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -32,6 +32,18 @@ export default function CarrierResearch() {
     });
     return unsub;
   }, []);
+
+  useEffect(() => {
+    const unsub = subscribeAutoResearch((snap) => setAutoResearch(snap));
+    return unsub;
+  }, []);
+
+  // Refresh the carrier list when auto-research finishes
+  const prevAutoRunning = useRef(false);
+  useEffect(() => {
+    if (prevAutoRunning.current && !autoResearch.running) load();
+    prevAutoRunning.current = autoResearch.running;
+  }, [autoResearch.running, load]);
 
   const buildFailureReason = (data, err) => {
     if (err) {
@@ -174,48 +186,8 @@ export default function CarrierResearch() {
     load();
   };
 
-  const startAutoResearch = async () => {
-    stopRef.current = false;
-    setAutoRunning(true);
-    setProcessing(true);
-    try {
-      while (!stopRef.current) {
-        const all = await listAllCarriers("-updated_date");
-        const queued = all.filter(c =>
-          c.usdot_number && ["Imported", "Queued", "Failed"].includes(c.lead_status)
-        );
-        if (queued.length === 0) break;
-
-        const toProcess = queued.slice(0, 10);
-        setProgress({ total: toProcess.length, done: 0, failed: 0, current: `Auto-researching ${toProcess.length} carriers · ${queued.length} in queue` });
-
-        const BATCH_SIZE = 3;
-        for (let i = 0; i < toProcess.length; i += BATCH_SIZE) {
-          if (stopRef.current) break;
-          const batch = toProcess.slice(i, i + BATCH_SIZE);
-          setProgress(p => ({ ...p, current: `Processing ${i + 1}-${Math.min(i + BATCH_SIZE, toProcess.length)} of ${toProcess.length} · ${queued.length} in queue` }));
-          const results = await Promise.all(batch.map(c => processOne(c)));
-          setProgress(p => ({
-            ...p,
-            done: p.done + results.filter(r => r.success).length,
-            failed: p.failed + results.filter(r => !r.success).length,
-          }));
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        await load();
-      }
-    } finally {
-      setAutoRunning(false);
-      setProcessing(false);
-      setProgress(p => ({ ...p, current: stopRef.current ? "Stopped" : "Queue complete" }));
-      stopRef.current = false;
-    }
-  };
-
-  const stopAutoResearch = () => {
-    stopRef.current = true;
-    setProgress(p => ({ ...p, current: "Stopping after current batch..." }));
-  };
+  const startAutoResearch = () => startRunnerAutoResearch(selectedSteps);
+  const stopAutoResearch = () => stopRunnerAutoResearch();
 
   // MC-number discovery runs in a module-level background runner so it keeps
   // working even when the user navigates away from this page.
@@ -238,7 +210,7 @@ export default function CarrierResearch() {
           <p className="text-slate-500 text-sm mt-1">{carriers.length} carriers in queue</p>
         </div>
         <div className="flex items-center gap-2">
-          {!autoRunning ? (
+          {!autoResearch.running ? (
             <button onClick={startAutoResearch} disabled={processing || carriers.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
               <Play className="w-4 h-4" />
@@ -251,9 +223,9 @@ export default function CarrierResearch() {
               Stop Scraping
             </button>
           )}
-          <button onClick={processBatch} disabled={processing || carriers.length === 0}
+          <button onClick={processBatch} disabled={processing || autoResearch.running || carriers.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
-            {processing && !autoRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {processing && !autoResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             Research Batch (10)
           </button>
         </div>
@@ -279,7 +251,7 @@ export default function CarrierResearch() {
               disabled={discovery.running}
               className="w-20 px-2 py-1.5 text-sm border border-slate-300 rounded-md disabled:opacity-50" />
             {!discovery.running ? (
-              <button onClick={startDiscovery} disabled={processing}
+              <button onClick={startDiscovery} disabled={processing || autoResearch.running}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
                 <Play className="w-4 h-4" />
                 Auto-Discover (MC+1)
@@ -323,7 +295,7 @@ export default function CarrierResearch() {
             </p>
           </div>
           {!audit.running ? (
-            <button onClick={runAudit} disabled={processing}
+            <button onClick={runAudit} disabled={processing || autoResearch.running}
               className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
               <ShieldCheck className="w-4 h-4" />
               Audit Database
@@ -394,7 +366,23 @@ export default function CarrierResearch() {
         </div>
       )}
 
-      {activeResearch && <ResearchStepsPanel research={activeResearch} />}
+      {autoResearch.running && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-green-800 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> {autoResearch.progress.current}
+            </span>
+            <span className="text-sm text-green-600">{autoResearch.progress.done} done, {autoResearch.progress.failed} failed</span>
+          </div>
+          <div className="w-full bg-green-100 rounded-full h-2">
+            <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${autoResearch.progress.total ? (autoResearch.progress.done + autoResearch.progress.failed) / autoResearch.progress.total * 100 : 0}%` }} />
+          </div>
+          <p className="text-xs text-green-700 mt-2">Running in the background — you can navigate to other pages and this will keep going.</p>
+        </div>
+      )}
+
+      {autoResearch.currentCarrier && <ResearchStepsPanel research={autoResearch.currentCarrier} />}
+      {!autoResearch.running && activeResearch && <ResearchStepsPanel research={activeResearch} />}
 
       {errors.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -491,7 +479,7 @@ export default function CarrierResearch() {
                     <td className="px-4 py-3 text-slate-500 text-xs">{carrier.last_researched_at ? new Date(carrier.last_researched_at).toLocaleString() : "—"}</td>
                     <td className="px-4 py-3 text-center">
                       {carrier.usdot_number && (
-                        <button onClick={() => retryOne(carrier)} disabled={processing}
+                        <button onClick={() => retryOne(carrier)} disabled={processing || autoResearch.running}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded disabled:opacity-50" title="Research">
                           <RefreshCw className="w-4 h-4" />
                         </button>
