@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { listAllCarriers } from "@/lib/paginatedList";
 import {
   Shield, User, Loader2, Eye, ChevronUp, ChevronDown, Mail, KeyRound, Trash2,
   RefreshCw, Upload, Check, X, Phone, IdCard, Truck,
@@ -31,12 +30,16 @@ export default function StaffList({
     setTimeout(() => setAllocMsg((prev) => ({ ...prev, [key]: undefined })), 4000);
   };
 
-  // Load carrier allocation counts per user
+  // Load carrier allocation counts per user — only fetch assigned carriers
   const loadCounts = async () => {
     try {
-      const all = await listAllCarriers("-updated_date");
+      const assigned = await base44.entities.Carrier.filter(
+        { assigned_to_user_id: { $ne: null } },
+        "-updated_date",
+        5000
+      );
       const counts = {};
-      all.forEach(c => {
+      assigned.forEach(c => {
         if (c.assigned_to_user_id) counts[c.assigned_to_user_id] = (counts[c.assigned_to_user_id] || 0) + 1;
       });
       setCarrierCounts(counts);
@@ -49,17 +52,24 @@ export default function StaffList({
     if (!count || count < 1) return;
     setAllocating(key);
     try {
-      const all = await listAllCarriers("-updated_date");
-      // Pick unassigned carriers (no assigned_to_user_id)
-      const unassigned = all.filter(c => !c.assigned_to_user_id);
-      const toAssign = unassigned.slice(0, count);
+      // Server-side filter: fetch only UNASSIGNED carriers directly from DB.
+      // This avoids loading all carriers client-side and reduces the race
+      // window where two concurrent allocations could pick the same carriers.
+      // We query for carriers where assigned_to_user_id is null/missing.
+      const unassigned = await base44.entities.Carrier.filter(
+        { assigned_to_user_id: null },
+        "-updated_date",
+        count
+      );
+      // Extra safety: exclude any that somehow already have an assignment
+      const toAssign = unassigned.filter(c => !c.assigned_to_user_id).slice(0, count);
       if (toAssign.length === 0) {
         setAllocMessage(key, "error", "No unassigned carriers available.");
         return;
       }
-      // Use updateMany to assign them in one call
+      // Assign in one batch — only updates the exact carrier IDs we selected
       await base44.entities.Carrier.updateMany(
-        { id: { $in: toAssign.map(c => c.id) } },
+        { id: { $in: toAssign.map(c => c.id) }, assigned_to_user_id: null },
         { $set: { assigned_to_user_id: userId } }
       );
       setAllocMessage(key, "success", `${toAssign.length} carriers allocated.`);
