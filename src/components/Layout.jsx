@@ -45,10 +45,15 @@ export default function Layout() {
     await base44.auth.logout();
   };
 
-  const visibleNav = navItems.filter(item =>
-    (outreachEnabled || (item.path !== "/campaigns" && item.path !== "/calling")) &&
-    (item.path !== "/settings" || user?.role === "admin")
-  );
+  const isAdmin = user?.role === "admin";
+  const staffAllowedPaths = ["/", "/carriers"];
+  const visibleNav = navItems.filter(item => {
+    // Staff (non-admin) only see Dashboard and Carrier Database.
+    if (!isAdmin) return staffAllowedPaths.includes(item.path);
+    // Admin sees everything, gated by outreach toggle for campaigns/calling.
+    return (outreachEnabled || (item.path !== "/campaigns" && item.path !== "/calling")) &&
+      (item.path !== "/settings" || isAdmin);
+  });
 
   const SidebarContent = (
     <>
