@@ -38,13 +38,6 @@ export default function CarrierResearch() {
     return unsub;
   }, []);
 
-  // Refresh the carrier list when auto-research finishes
-  const prevAutoRunning = useRef(false);
-  useEffect(() => {
-    if (prevAutoRunning.current && !autoResearch.running) load();
-    prevAutoRunning.current = autoResearch.running;
-  }, [autoResearch.running, load]);
-
   const buildFailureReason = (data, err) => {
     if (err) {
       return { reason: "Exception", detail: err.response?.data?.error || err.message || "Request failed" };
@@ -101,6 +94,13 @@ export default function CarrierResearch() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Refresh the carrier list when auto-research finishes
+  const prevAutoRunning = useRef(false);
+  useEffect(() => {
+    if (prevAutoRunning.current && !autoResearch.running) load();
+    prevAutoRunning.current = autoResearch.running;
+  }, [autoResearch.running, load]);
 
   const prevAuditRunning = useRef(false);
   const prevAuditRemoved = useRef(0);
