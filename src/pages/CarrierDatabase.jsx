@@ -322,6 +322,7 @@ export default function CarrierDatabase() {
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Safety</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Score</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Scraped On</th>
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
@@ -373,6 +374,11 @@ export default function CarrierDatabase() {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[carrier.lead_status] || "bg-slate-100 text-slate-700"}`}>
                         {carrier.lead_status || "Imported"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+                      {carrier.last_researched_at
+                        ? new Date(carrier.last_researched_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+                        : <span className="text-slate-400">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
