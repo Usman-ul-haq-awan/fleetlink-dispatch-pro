@@ -13,6 +13,7 @@ import CarrierDetail from '@/pages/CarrierDetail';
 import CarrierResearch from '@/pages/CarrierResearch';
 import EmailCampaigns from '@/pages/EmailCampaigns';
 import EmailTesting from '@/pages/EmailTesting';
+import Outreach from '@/pages/Outreach';
 import CallingQueue from '@/pages/CallingQueue';
 import HumanHandoff from '@/pages/HumanHandoff';
 import OnboardingPage from '@/pages/OnboardingPage';
@@ -58,6 +59,7 @@ const AuthenticatedApp = () => {
         <Route path="/research" element={<CarrierResearch />} />
         <Route path="/campaigns" element={<EmailCampaigns />} />
         <Route path="/email-testing" element={<EmailTesting />} />
+        <Route path="/outreach" element={<Outreach />} />
         <Route path="/calling" element={<CallingQueue />} />
         <Route path="/handoffs" element={<HumanHandoff />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
