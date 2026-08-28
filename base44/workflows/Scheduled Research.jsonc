@@ -15,16 +15,32 @@
             "function_name": "runResearchBatch",
             "args": {}
           },
-          "then": "end",
+          "then": "discover_batch",
           "x-base44": {
             "title": "Research carrier batch",
             "description": "Process up to 3 imported carriers"
           }
         }
+      },
+      {
+        "discover_batch": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "runAutoDiscovery",
+            "args": {
+              "batch_size": 10
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Server-side discovery batch",
+            "description": "Discovers & researches new MC numbers when the engine is enabled; no-ops when stopped"
+          }
+        }
       }
     ]
   },
-  "description": "Automatically researches imported carriers through the browser worker every 5 minutes, independent of any browser or laptop being open.",
+  "description": "Automatically researches imported carriers through the browser worker every 5 minutes, then runs a server-side MC-number discovery batch (which no-ops when the discovery engine is stopped). Independent of any browser or laptop being open.",
   "trigger": {
     "condition": null,
     "config": {

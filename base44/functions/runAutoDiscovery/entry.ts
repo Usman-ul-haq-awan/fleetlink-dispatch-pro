@@ -1,9 +1,14 @@
-// Server-side MC-number discovery — runs entirely on the Base44 server, so it
-// keeps working through app updates, hot reloads, and browser navigation.
-// Iterates MC numbers (from a start point or max-MC-in-DB + 1), researches each
-// via the browser worker, keeps valid carriers, and deletes invalid/not-found
-// ones. Processes a bounded batch per call; the UI auto-continues with the
-// returned next_mc until the target carrier count is reached.
+// Server-side MC-number discovery — runs entirely on the Base44 server via a
+// scheduled workflow (every 2 minutes), so it keeps working through app
+// updates, browser navigation, AND internet disconnections on the user's
+// machine. The workflow calls this function; the function only does work when
+// the `discovery_enabled` AppSetting is "true". When the target carrier count
+// is reached, it auto-disables itself so the workflow becomes a no-op until
+// the user starts it again.
+//
+// Iterates MC numbers (from a stored start point or max-MC-in-DB + 1),
+// researches each via the browser worker, keeps valid carriers, and deletes
+// invalid/not-found ones. Processes a bounded batch per call.
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { secrets } from "base44:runtime";
@@ -11,6 +16,33 @@ import { normalizeSteps, callBrowserWorker, processResearchResult } from "../../
 import { deleteCarrierAndRelated } from "../../shared/carrierCleanup.ts";
 
 const DEFAULT_BATCH = 8;
+const DEFAULT_TARGET = 200;
+
+async function getSetting(svc: any, key: string): Promise<string | null> {
+  try {
+    const rows = await svc.entities.AppSetting.filter({ setting_key: key });
+    return rows && rows.length > 0 ? rows[0].setting_value : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setSetting(svc: any, key: string, value: string, category = "batch", type = "string", description = "") {
+  try {
+    const rows = await svc.entities.AppSetting.filter({ setting_key: key });
+    if (rows && rows.length > 0) {
+      await svc.entities.AppSetting.update(rows[0].id, { setting_value: value });
+    } else {
+      await svc.entities.AppSetting.create({
+        setting_key: key,
+        setting_value: value,
+        setting_category: category,
+        setting_type: type,
+        description,
+      });
+    }
+  } catch {}
+}
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -27,16 +59,27 @@ export default async function(req: Request): Promise<Response> {
     let body: any = {};
     try { body = await req.json(); } catch {}
     const batchSize = Math.min(Math.max(parseInt(body?.batch_size, 10) || DEFAULT_BATCH, 1), 15);
-    const startMc = body?.start_mc ? parseInt(body.start_mc, 10) : null;
-    const targetCount = Math.max(1, parseInt(body?.target_count, 10) || 200);
+
+    // Read runtime config from AppSettings (so the scheduled workflow can call
+    // this with no args and still respect the user's target / start MC).
+    const enabledVal = await getSetting(svc, "discovery_enabled");
+    const enabled = enabledVal !== "false"; // default ON unless explicitly disabled
+    if (!enabled) {
+      return Response.json({ success: true, skipped: true, message: "Discovery engine is stopped." });
+    }
+
+    const targetCount = Math.max(
+      1,
+      parseInt(body?.target_count, 10) || parseInt((await getSetting(svc, "discovery_target_count")) || "", 10) || DEFAULT_TARGET
+    );
+    const storedStartMc = parseInt((await getSetting(svc, "discovery_start_mc")) || "", 10);
+    const bodyStartMc = body?.start_mc ? parseInt(body.start_mc, 10) : null;
+    const requestedStartMc = bodyStartMc && !isNaN(bodyStartMc) ? bodyStartMc : (isNaN(storedStartMc) ? null : storedStartMc);
 
     // Determine starting MC.
     let currentMc: number;
-    if (startMc && !isNaN(startMc)) {
-      currentMc = startMc - 1; // loop pre-increments, so first attempt = startMc
-    } else {
-      // Find the max MC number currently in the database.
-      let maxMc = 0;
+    let maxMc = 0;
+    {
       let skip = 0;
       const pageLimit = 5000;
       while (true) {
@@ -49,6 +92,12 @@ export default async function(req: Request): Promise<Response> {
         if (page.length < pageLimit) break;
         skip += pageLimit;
       }
+    }
+    // If a start MC was requested AND it's ahead of the current DB max, jump
+    // there. Otherwise continue from the DB max (auto-resume).
+    if (requestedStartMc && !isNaN(requestedStartMc) && requestedStartMc > maxMc) {
+      currentMc = requestedStartMc - 1; // loop pre-increments
+    } else {
       currentMc = maxMc;
     }
 
@@ -125,6 +174,13 @@ export default async function(req: Request): Promise<Response> {
       }
     }
 
+    const targetReached = totalCarriers >= targetCount;
+    // Auto-disable when the target is reached so the scheduled workflow stops
+    // doing work until the user explicitly starts it again.
+    if (targetReached) {
+      await setSetting(svc, "discovery_enabled", "false", "batch", "boolean", "Server-side discovery engine running state");
+    }
+
     return Response.json({
       success: true,
       found,
@@ -132,7 +188,9 @@ export default async function(req: Request): Promise<Response> {
       attempted,
       next_mc: lastMc + 1,
       total_carriers: totalCarriers,
-      target_reached: totalCarriers >= targetCount,
+      target_count: targetCount,
+      target_reached: targetReached,
+      auto_disabled: targetReached,
       errors,
     });
   } catch (error: any) {

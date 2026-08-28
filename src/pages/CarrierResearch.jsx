@@ -24,8 +24,7 @@ export default function CarrierResearch() {
   const [discovery, setDiscovery] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, failedMcs: [] });
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
   const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
-  const [serverResearch, setServerResearch] = useState({ running: false, progress: null, result: null });
-  const serverResearchStop = useRef(false);
+  const [serverResearch, setServerResearch] = useState({ enabled: false, target: 200, startMc: null, lastResult: null, saving: false });
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -39,6 +38,31 @@ export default function CarrierResearch() {
     const unsub = subscribeAutoResearch((snap) => setAutoResearch(snap));
     return unsub;
   }, []);
+
+  // Server-side discovery engine — toggled by an AppSetting and driven by the
+  // scheduled workflow (every 5 min), NOT a browser loop. Poll the setting so
+  // we detect when the engine auto-disables itself (target reached).
+  const loadServerResearchSetting = useCallback(async (syncInputs = false) => {
+    try {
+      const rows = await base44.entities.AppSetting.filter({ setting_key: "discovery_enabled" });
+      const enabled = rows.length === 0 || rows[0].setting_value !== "false";
+      const tRows = await base44.entities.AppSetting.filter({ setting_key: "discovery_target_count" });
+      const target = tRows.length > 0 ? parseInt(tRows[0].setting_value, 10) || 200 : 200;
+      const sRows = await base44.entities.AppSetting.filter({ setting_key: "discovery_start_mc" });
+      const startMc = sRows.length > 0 ? (parseInt(sRows[0].setting_value, 10) || null) : null;
+      setServerResearch((prev) => ({ ...prev, enabled, target, startMc }));
+      if (syncInputs) {
+        setDiscoverTarget(target);
+        setDiscoverStartMc(startMc ? String(startMc) : "");
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadServerResearchSetting(true);
+    const id = setInterval(() => loadServerResearchSetting(false), 10000);
+    return () => clearInterval(id);
+  }, [loadServerResearchSetting]);
 
   const buildFailureReason = (data, err) => {
     if (err) {
@@ -191,54 +215,44 @@ export default function CarrierResearch() {
   const startAutoResearch = () => startRunnerAutoResearch(selectedSteps);
   const stopAutoResearch = () => stopRunnerAutoResearch();
 
-  // Server-side research — runs on the Base44 server (survives app updates &
-  // navigation). Picks up the "Start from MC" value entered in the MC Number
-  // Discovery box above and discovers/researches carriers starting from that MC.
-  const runServerResearch = async (startMc, nextMc) => {
-    if (serverResearchStop.current) return;
-    setServerResearch((prev) => ({ running: true, progress: prev.progress, result: null }));
-    try {
-      const res = await base44.functions.invoke("runAutoDiscovery", {
-        batch_size: 10,
-        target_count: discoverTarget,
-        start_mc: startMc ?? (nextMc ?? null),
-      });
-      const data = res.data;
-      setServerResearch((prev) => {
-        const prog = prev.progress || { found: 0, failed: 0, currentMc: startMc ?? data.next_mc, totalCarriers: 0 };
-        return {
-          running: false,
-          progress: {
-            found: prog.found + (data.found || 0),
-            failed: prog.failed + (data.failed || 0),
-            currentMc: data.next_mc,
-            totalCarriers: data.total_carriers,
-          },
-          result: data,
-        };
-      });
-      load();
-      // Auto-continue until the target is reached or stopped.
-      if (!data.target_reached && !serverResearchStop.current) {
-        setTimeout(() => runServerResearch(null, data.next_mc), 1500);
-      } else if (data.target_reached) {
-        setServerResearch((prev) => ({ ...prev, running: false, result: { ...data, message: "Target carrier count reached." } }));
-      }
-    } catch (err) {
-      setServerResearch((prev) => ({ running: false, progress: prev.progress, result: { error: err.response?.data?.error || err.message } }));
+  // Server-side discovery is driven by the scheduled workflow + an AppSetting
+  // toggle — NOT a browser loop — so it survives internet disconnections,
+  // app updates, and navigation. The workflow calls runAutoDiscovery every
+  // 5 minutes; the function only does work when discovery_enabled is true.
+  const saveSetting = async (key, value, category = "batch", type = "string", description = "") => {
+    const rows = await base44.entities.AppSetting.filter({ setting_key: key });
+    if (rows.length > 0) {
+      await base44.entities.AppSetting.update(rows[0].id, { setting_value: value });
+    } else {
+      await base44.entities.AppSetting.create({ setting_key: key, setting_value: value, setting_category: category, setting_type: type, description });
     }
   };
 
-  const startServerResearch = () => {
-    const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
-    serverResearchStop.current = false;
-    setServerResearch({ running: true, progress: { found: 0, failed: 0, currentMc: mc || 0, totalCarriers: 0 }, result: null });
-    runServerResearch(mc || null, null);
+  const startServerResearch = async () => {
+    setServerResearch((prev) => ({ ...prev, saving: true }));
+    try {
+      await saveSetting("discovery_target_count", String(discoverTarget), "batch", "number", "Server-side discovery target carrier count");
+      const mc = parseInt(String(discoverStartMc).replace(/[^0-9]/g, ""), 10);
+      if (mc && !isNaN(mc)) {
+        await saveSetting("discovery_start_mc", String(mc), "batch", "number", "Server-side discovery start MC");
+      } else {
+        await saveSetting("discovery_start_mc", "", "batch", "number", "Server-side discovery start MC");
+      }
+      await saveSetting("discovery_enabled", "true", "batch", "boolean", "Server-side discovery engine running state");
+      setServerResearch((prev) => ({ ...prev, enabled: true, target: discoverTarget, startMc: mc || null, saving: false }));
+    } catch (err) {
+      setServerResearch((prev) => ({ ...prev, saving: false, lastResult: { error: err.message } }));
+    }
   };
 
-  const stopServerResearch = () => {
-    serverResearchStop.current = true;
-    setServerResearch((prev) => ({ ...prev, running: false, result: { ...prev.result, message: "Stopped — no further batches will run." } }));
+  const stopServerResearch = async () => {
+    setServerResearch((prev) => ({ ...prev, saving: true }));
+    try {
+      await saveSetting("discovery_enabled", "false", "batch", "boolean", "Server-side discovery engine running state");
+      setServerResearch((prev) => ({ ...prev, enabled: false, saving: false }));
+    } catch (err) {
+      setServerResearch((prev) => ({ ...prev, saving: false }));
+    }
   };
 
   // MC-number discovery runs in a module-level background runner so it keeps
@@ -275,16 +289,16 @@ export default function CarrierResearch() {
               Stop Scraping
             </button>
           )}
-          {!serverResearch.running ? (
-            <button onClick={startServerResearch} disabled={processing || autoResearch.running || discovery.running}
+          {!serverResearch.enabled ? (
+            <button onClick={startServerResearch} disabled={serverResearch.saving || processing || autoResearch.running || discovery.running}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
-              <Server className="w-4 h-4" />
+              {serverResearch.saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
               {discoverStartMc ? `Server from MC-${discoverStartMc}` : "Server-Side Research"}
             </button>
           ) : (
-            <button onClick={stopServerResearch}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
-              <AlertCircle className="w-4 h-4" />
+            <button onClick={stopServerResearch} disabled={serverResearch.saving}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+              {serverResearch.saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-4 h-4" />}
               Stop Server
             </button>
           )}
@@ -448,25 +462,23 @@ export default function CarrierResearch() {
         </div>
       )}
 
-      {(serverResearch.running || serverResearch.progress) && (
+      {serverResearch.enabled && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-emerald-800 flex items-center gap-2">
-              {serverResearch.running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
-              {serverResearch.running
-                ? `Server research — next MC-${serverResearch.progress?.currentMc || "…"}`
-                : (serverResearch.result?.message || "Server research idle")}
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              Server-side discovery engine is running
             </span>
             <span className="text-sm text-emerald-600">
-              {serverResearch.progress?.found || 0} found · {serverResearch.progress?.failed || 0} failed
-              {serverResearch.progress?.totalCarriers != null && ` · ${serverResearch.progress.totalCarriers} total`}
+              Target: {serverResearch.target || discoverTarget} carriers
+              {serverResearch.startMc && ` · from MC-${serverResearch.startMc}`}
             </span>
           </div>
           <p className="text-xs text-emerald-700 mt-1">
-            Runs on the Base44 server — keeps going through app updates and browser navigation.
+            Runs on the Base44 server every 5 minutes — keeps going through internet disconnections, app updates, and navigation. Auto-stops when the target carrier count is reached.
           </p>
-          {serverResearch.result?.error && (
-            <p className="text-xs text-red-600 mt-1">{serverResearch.result.error}</p>
+          {serverResearch.lastResult?.error && (
+            <p className="text-xs text-red-600 mt-1">{serverResearch.lastResult.error}</p>
           )}
         </div>
       )}
