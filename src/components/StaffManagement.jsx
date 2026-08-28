@@ -18,11 +18,32 @@ export default function StaffManagement() {
     try {
       const [u, sm, me] = await Promise.all([
         base44.entities.User.list(),
-        base44.entities.StaffMember.list("-created_date", 200),
+        base44.entities.StaffMember.list("-created_date", 500),
         base44.auth.me().catch(() => null),
       ]);
+      // Auto-create StaffMember records for any user that doesn't have one,
+      // so every user shows up with full staff management details (phone,
+      // login code, approval, ID document).
+      const emailToStaff = {};
+      sm.forEach((s) => { emailToStaff[(s.email || "").toLowerCase()] = s; });
+      const missing = u.filter(
+        (user) => !emailToStaff[(user.email || "").toLowerCase()]
+      );
+      let updatedStaff = sm;
+      if (missing.length > 0) {
+        const newRecords = missing.map((user) => ({
+          full_name: user.full_name || "",
+          email: (user.email || "").toLowerCase(),
+          role: user.role || "user",
+          status: "Active",
+          approved: user.role === "admin",
+          user_id: user.id,
+        }));
+        const created = await base44.entities.StaffMember.bulkCreate(newRecords);
+        updatedStaff = [...sm, ...created];
+      }
       setUsers(u);
-      setStaffMembers(sm);
+      setStaffMembers(updatedStaff);
       setCurrentUser(me);
     } catch (err) {
       console.error("Failed to load staff:", err);
