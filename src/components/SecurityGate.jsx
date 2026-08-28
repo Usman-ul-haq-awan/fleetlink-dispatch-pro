@@ -33,11 +33,9 @@ export default function SecurityGate({ children }) {
   }, []);
 
   useEffect(() => {
-    // Already passed the gate this browser session — go straight to the app.
-    if (sessionStorage.getItem(SESSION_KEY) === "true") {
-      setScreen("app");
-      return;
-    }
+    // Always check approval + PIN status on every app open. Never skip
+    // via sessionStorage — on mobile PWA that flag persists across launches
+    // and would permanently bypass the gate after one successful login.
     fetchStatus();
   }, [fetchStatus]);
 
