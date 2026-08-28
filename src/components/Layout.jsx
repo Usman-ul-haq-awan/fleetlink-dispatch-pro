@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import {
   LayoutDashboard, Database, Search, ShieldCheck, Mail, Phone,
   UserCheck, ClipboardCheck, Download, Activity, Settings, LogOut,
-  Truck, FlaskConical
+  Truck, Send
 } from "lucide-react";
 
 const navItems = [
@@ -12,7 +12,7 @@ const navItems = [
   { label: "Carrier Database", path: "/carriers", icon: Database },
   { label: "Carrier Research", path: "/research", icon: Search },
   { label: "Email Campaigns", path: "/campaigns", icon: Mail },
-  { label: "Email Testing", path: "/email-testing", icon: FlaskConical },
+  { label: "Email Engine", path: "/email-testing", icon: Send },
   { label: "Calling Queue", path: "/calling", icon: Phone },
   { label: "Human Handoff", path: "/handoffs", icon: UserCheck },
   { label: "Onboarding", path: "/onboarding", icon: ClipboardCheck },

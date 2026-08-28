@@ -1,287 +1,316 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import {
-  Send, Loader2, CheckCircle, AlertCircle, Mail, FlaskConical,
-  Eye, Truck, Clock, RefreshCw
+  Send, Loader2, CheckCircle, AlertCircle, Mail, Zap, Clock,
+  RefreshCw, Truck, TrendingUp, Target, Play, Eye
 } from "lucide-react";
+import { listAllCarriers } from "@/lib/paginatedList";
 
 export default function EmailTesting() {
-  const [user, setUser] = useState(null);
+  const [stats, setStats] = useState({ total: 0, eligible: 0, assigned: 0, sent: 0, completed: 0, dueToday: 0 });
+  const [funnelBreakdown, setFunnelBreakdown] = useState([]);
+  const [recentLogs, setRecentLogs] = useState([]);
   const [carriers, setCarriers] = useState([]);
-  const [logs, setLogs] = useState([]);
-  const [loadingCarriers, setLoadingCarriers] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState(null);
+  const [filter, setFilter] = useState("all"); // all | unassigned | in_progress | completed
 
-  // Step 1 — pipeline test
-  const [testEmail, setTestEmail] = useState("");
-  const [testSubject, setTestSubject] = useState("Test Email from Dispatch CRM");
-  const [testBody, setTestBody] = useState("This is a test email to verify the dispatch CRM email pipeline is working. No carrier was contacted.");
-  const [sendingTest, setSendingTest] = useState(false);
-  const [testResult, setTestResult] = useState(null);
-
-  // Step 2 — personalized preview
-  const [selectedCarrier, setSelectedCarrier] = useState("");
-  const [preview, setPreview] = useState(null);
-  const [generating, setGenerating] = useState(false);
-  const [previewTarget, setPreviewTarget] = useState("");
-  const [sendingPreview, setSendingPreview] = useState(false);
-  const [previewResult, setPreviewResult] = useState(null);
-
-  // Step 3 — logs
-  const [loadingLogs, setLoadingLogs] = useState(true);
-
-  useEffect(() => {
-    base44.auth.me().then(u => {
-      setUser(u);
-      if (u?.email) {
-        setTestEmail(u.email);
-        setPreviewTarget(u.email);
-      }
-    }).catch(() => {});
-    loadCarriers();
-    loadLogs();
-  }, []);
-
-  const loadCarriers = async () => {
-    setLoadingCarriers(true);
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const all = await base44.entities.Carrier.list("-updated_date", 200);
-      setCarriers(all);
-    } catch (err) { console.error(err); }
-    finally { setLoadingCarriers(false); }
-  };
+      const all = await listAllCarriers("-updated_date");
+      const logs = await base44.entities.EmailLog.list("-sent_at", 30);
+      setRecentLogs(logs);
 
-  const loadLogs = async () => {
-    setLoadingLogs(true);
-    try {
-      const recent = await base44.entities.EmailLog.list("-sent_at", 20);
-      setLogs(recent);
-    } catch (err) { console.error(err); }
-    finally { setLoadingLogs(false); }
-  };
+      const hasEmail = all.filter((c) => c.email && !c.do_not_contact);
+      const terminal = ["Active Client", "Do Not Contact", "Onboarding", "Human Handoff", "Interested"];
+      const eligible = hasEmail.filter((c) => !terminal.includes(c.lead_status));
+      const assigned = eligible.filter((c) => c.email_funnel);
+      const completed = eligible.filter((c) => c.email_sequence_complete);
+      const inProgress = assigned.filter((c) => !c.email_sequence_complete);
+      const now = new Date();
+      const dueToday = eligible.filter(
+        (c) => !c.email_funnel || !c.email_next_send_at || new Date(c.email_next_send_at) <= now
+      );
 
-  // Step 1: send a plain test email to verify the pipeline
-  const sendPipelineTest = async () => {
-    if (!testEmail || !testSubject) return;
-    setSendingTest(true);
-    setTestResult(null);
-    try {
-      const res = await base44.functions.invoke("sendTestEmail", {
-        to_email: testEmail,
-        subject: testSubject,
-        body: testBody,
+      setStats({
+        total: all.length,
+        eligible: eligible.length,
+        assigned: assigned.length,
+        sent: logs.filter((l) => l.status === "Sent").length,
+        completed: completed.length,
+        dueToday: dueToday.length,
       });
-      setTestResult({ success: true, message: `Sent to ${res.data.to || testEmail}` });
-      loadLogs();
-    } catch (err) {
-      setTestResult({ success: false, message: err.response?.data?.error || err.message });
-    } finally {
-      setSendingTest(false);
-    }
-  };
 
-  // Step 2: generate a personalized AI email for the selected carrier
-  const generatePreview = async () => {
-    if (!selectedCarrier) return;
-    setGenerating(true);
-    setPreview(null);
-    setPreviewResult(null);
-    try {
-      const res = await base44.functions.invoke("generateEmailContent", { carrier_id: selectedCarrier });
-      setPreview(res.data);
-    } catch (err) {
-      setPreview({ error: err.response?.data?.error || err.message });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Step 2: send the personalized email to YOUR test inbox (not the carrier's)
-  const sendPreviewToTest = async () => {
-    if (!previewTarget || !preview?.subject) return;
-    setSendingPreview(true);
-    setPreviewResult(null);
-    try {
-      const res = await base44.functions.invoke("sendTestEmail", {
-        to_email: previewTarget,
-        subject: preview.subject,
-        body: preview.body,
-        carrier_id: selectedCarrier,
+      // Funnel breakdown
+      const funnelMap = {};
+      assigned.forEach((c) => {
+        const f = c.email_funnel || "unassigned";
+        funnelMap[f] = (funnelMap[f] || 0) + 1;
       });
-      setPreviewResult({ success: true, message: `Sent to ${res.data.to || previewTarget}` });
-      loadLogs();
+      const funnelNames = {
+        seq_1: "Self-Dispatch Time Reclaim",
+        seq_2: "Fleet Scaling & Capacity",
+        seq_3: "New MC Authority Acceleration",
+        seq_4: "Broker Quality & Risk Mitigation",
+        seq_5: "No Forced Dispatch Freedom",
+        seq_6: "Deadhead & Lane Optimization",
+        seq_7: "Transparent Financial Structure",
+        seq_8: "24/7/365 Back-Office Support",
+        seq_9: "Growth & Equipment Expansion",
+        seq_10: "Premium Consultative Partnership",
+      };
+      setFunnelBreakdown(
+        Object.entries(funnelMap).map(([id, count]) => ({ id, name: funnelNames[id] || id, count }))
+      );
+
+      // Carrier email status
+      let filtered = eligible;
+      if (filter === "unassigned") filtered = eligible.filter((c) => !c.email_funnel);
+      else if (filter === "in_progress") filtered = inProgress;
+      else if (filter === "completed") filtered = completed;
+      setCarriers(filtered.slice(0, 100));
     } catch (err) {
-      setPreviewResult({ success: false, message: err.response?.data?.error || err.message });
+      console.error("Load error:", err);
     } finally {
-      setSendingPreview(false);
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const runNow = async () => {
+    setRunning(true);
+    setRunResult(null);
+    try {
+      const res = await base44.functions.invoke("runEmailBatch", {});
+      setRunResult(res.data);
+      load();
+    } catch (err) {
+      setRunResult({ error: err.response?.data?.error || err.message });
+    } finally {
+      setRunning(false);
     }
   };
 
-  const selectedCarrierObj = carriers.find(c => c.id === selectedCarrier);
+  const statCards = [
+    { label: "Total Carriers", value: stats.total, icon: Truck, color: "blue" },
+    { label: "Eligible for Email", value: stats.eligible, icon: Mail, color: "indigo" },
+    { label: "Due Today", value: stats.dueToday, icon: Clock, color: "amber" },
+    { label: "Funnel Assigned", value: stats.assigned, icon: Target, color: "violet" },
+    { label: "Sequences Complete", value: stats.completed, icon: CheckCircle, color: "green" },
+    { label: "Recent Sends (30)", value: stats.sent, icon: TrendingUp, color: "teal" },
+  ];
+
+  const colorClasses = {
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+    indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    green: "bg-green-50 text-green-700 border-green-200",
+    amber: "bg-amber-50 text-amber-700 border-amber-200",
+    violet: "bg-violet-50 text-violet-700 border-violet-200",
+    teal: "bg-teal-50 text-teal-700 border-teal-200",
+    red: "bg-red-50 text-red-700 border-red-200",
+  };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <FlaskConical className="w-6 h-6 text-blue-600" />
-          Email Testing Protocol
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Verify email delivery safely before sending to real carriers. No carrier is contacted in steps 1–2.
-        </p>
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <Zap className="w-6 h-6 text-violet-600" />
+            Email Engine
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Server-side automated outreach — runs daily at 9 AM even when your laptop is off
+          </p>
+        </div>
+        <button onClick={runNow} disabled={running}
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+          {running ? "Running..." : "Run Engine Now"}
+        </button>
       </div>
 
-      {/* Step 1 — Pipeline Test */}
-      <StepCard
-        number={1}
-        title="Pipeline Test"
-        subtitle="Send a plain test email to your own inbox to confirm the email system can deliver."
-        icon={Mail}
-      >
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">Send To (your email)</label>
-            <input type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      {/* Run result banner */}
+      {runResult && !runResult.error && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-green-800">
+              Engine run complete — {runResult.sent || 0} sent, {runResult.failed || 0} failed
+            </p>
+            <p className="text-green-700 text-xs mt-1">
+              {runResult.eligible || 0} eligible carriers · {runResult.assigned_count || 0} newly assigned to funnels
+              {runResult.message && runResult.sent === 0 ? ` · ${runResult.message}` : ""}
+            </p>
+            {runResult.assigned && runResult.assigned.length > 0 && (
+              <div className="mt-2 max-h-24 overflow-y-auto">
+                {runResult.assigned.slice(0, 8).map((a, i) => (
+                  <p key={i} className="text-xs text-green-600">• {a}</p>
+                ))}
+              </div>
+            )}
           </div>
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">Subject</label>
-            <input type="text" value={testSubject} onChange={e => setTestSubject(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 block mb-1">Body</label>
-            <textarea value={testBody} onChange={e => setTestBody(e.target.value)} rows={3}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <button onClick={sendPipelineTest} disabled={sendingTest || !testEmail || !testSubject}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-            {sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sendingTest ? "Sending..." : "Send Test Email"}
-          </button>
-          {testResult && <ResultBanner result={testResult} />}
         </div>
-      </StepCard>
+      )}
+      {runResult?.error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <p className="text-sm text-red-700">{runResult.error}</p>
+        </div>
+      )}
 
-      {/* Step 2 — Personalized Preview */}
-      <StepCard
-        number={2}
-        title="Personalized Preview"
-        subtitle="Generate an AI-personalized email for any carrier, then send it to your own inbox to review how it looks."
-        icon={Eye}
-      >
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <select value={selectedCarrier} onChange={e => { setSelectedCarrier(e.target.value); setPreview(null); setPreviewResult(null); }}
-              className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">{loadingCarriers ? "Loading carriers..." : "Select a carrier..."}</option>
-              {carriers.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.legal_name || c.dba_name || "Unknown"} (USDOT: {c.usdot_number || "—"})
-                </option>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        {statCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className={`rounded-lg border p-4 ${colorClasses[card.color]}`}>
+              <div className="flex items-center justify-between mb-2">
+                <Icon className="w-5 h-5 opacity-70" />
+                <span className="text-2xl font-bold">{card.value}</span>
+              </div>
+              <p className="text-xs font-medium opacity-80">{card.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Funnel breakdown */}
+        <div className="bg-white rounded-lg border border-slate-200 p-5">
+          <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <Target className="w-5 h-5 text-violet-600" />
+            Funnel Assignments
+          </h2>
+          {funnelBreakdown.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">
+              No carriers assigned yet. Run the engine to auto-assign funnels based on carrier data.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {funnelBreakdown.map((f) => (
+                <div key={f.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{f.name}</p>
+                    <p className="text-xs text-slate-400 font-mono">{f.id}</p>
+                  </div>
+                  <span className="px-3 py-1 bg-violet-100 text-violet-700 rounded-full text-sm font-semibold">
+                    {f.count}
+                  </span>
+                </div>
               ))}
-            </select>
-            <button onClick={generatePreview} disabled={!selectedCarrier || generating}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap">
-              {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-              {generating ? "Generating..." : "Generate AI Email"}
+            </div>
+          )}
+        </div>
+
+        {/* Recent sends */}
+        <div className="bg-white rounded-lg border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Mail className="w-5 h-5 text-blue-600" />
+              Recent Emails
+            </h2>
+            <button onClick={load} disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
             </button>
           </div>
-
-          {selectedCarrierObj && (
-            <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600">
-              <span className="font-medium">Carrier email on file:</span>{" "}
-              {selectedCarrierObj.email ? (
-                <span className="text-slate-800">{selectedCarrierObj.email}</span>
-              ) : (
-                <span className="text-amber-600">No email scraped yet</span>
-              )}
-            </div>
-          )}
-
-          {preview && !preview.error && (
-            <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-3">
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Subject</label>
-                <p className="text-sm font-medium text-slate-900">{preview.subject}</p>
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">Body</label>
-                <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">{preview.body}</pre>
-              </div>
-              <div className="flex items-end gap-2 pt-2 border-t border-slate-200">
-                <div className="flex-1">
-                  <label className="text-xs text-slate-500 block mb-1">Send preview to (your inbox)</label>
-                  <input type="email" value={previewTarget} onChange={e => setPreviewTarget(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {recentLogs.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No emails sent yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {recentLogs.map((log) => (
+                <div key={log.id} className="flex items-start gap-2 py-2 border-b border-slate-100 last:border-0">
+                  <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                    log.status === "Sent" ? "bg-green-500" :
+                    log.status === "Failed" ? "bg-red-500" :
+                    log.status === "Replied" ? "bg-blue-500" : "bg-slate-400"
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-600 truncate">{log.to_email}</p>
+                    <p className="text-xs text-slate-500 truncate">{log.subject || "—"}</p>
+                    <p className="text-xs text-slate-400">{log.sent_at ? new Date(log.sent_at).toLocaleString() : ""}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                    log.status === "Sent" ? "bg-green-100 text-green-700" :
+                    log.status === "Failed" ? "bg-red-100 text-red-700" :
+                    "bg-slate-100 text-slate-600"
+                  }`}>{log.status}</span>
                 </div>
-                <button onClick={sendPreviewToTest} disabled={sendingPreview || !previewTarget}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 whitespace-nowrap">
-                  {sendingPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {sendingPreview ? "Sending..." : "Send to Test Inbox"}
-                </button>
-              </div>
-              <p className="text-xs text-slate-400">
-                This sends to <strong>your</strong> inbox, not the carrier's. Use it to review formatting and tone.
-              </p>
-              {previewResult && <ResultBanner result={previewResult} />}
+              ))}
             </div>
           )}
-
-          {preview?.error && <ResultBanner result={{ success: false, message: preview.error }} />}
         </div>
-      </StepCard>
+      </div>
 
-      {/* Step 3 — Delivery Log */}
-      <StepCard
-        number={3}
-        title="Delivery Log"
-        subtitle="Recent email sends with delivery status. Refresh after each test to confirm."
-        icon={Clock}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs text-slate-500">{logs.length} recent emails</p>
-          <button onClick={loadLogs} disabled={loadingLogs}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50">
-            <RefreshCw className={`w-3.5 h-3.5 ${loadingLogs ? "animate-spin" : ""}`} /> Refresh
-          </button>
-        </div>
-        {loadingLogs ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 text-slate-300 animate-spin" />
+      {/* Carrier email status table */}
+      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <h2 className="font-semibold text-slate-900">Carrier Email Status</h2>
+          <div className="flex items-center gap-2">
+            {["all", "unassigned", "in_progress", "completed"].map((f) => (
+              <button key={f} onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md ${
+                  filter === f ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}>
+                {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
           </div>
-        ) : logs.length === 0 ? (
-          <div className="text-center py-8">
-            <Mail className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No emails sent yet. Run step 1 to see delivery here.</p>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 text-slate-300 animate-spin" />
+          </div>
+        ) : carriers.length === 0 ? (
+          <div className="text-center py-16">
+            <Mail className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500">No carriers matching this filter.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-72 overflow-y-auto border border-slate-200 rounded-lg">
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
                 <tr>
-                  <th className="text-left px-3 py-2 font-medium text-slate-600">To</th>
-                  <th className="text-left px-3 py-2 font-medium text-slate-600">Subject</th>
-                  <th className="text-left px-3 py-2 font-medium text-slate-600">Status</th>
-                  <th className="text-left px-3 py-2 font-medium text-slate-600">Sent</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Company</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Email</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Funnel</th>
+                  <th className="text-center px-4 py-2 font-medium text-slate-600">Step</th>
+                  <th className="text-left px-4 py-2 font-medium text-slate-600">Next Send</th>
+                  <th className="text-center px-4 py-2 font-medium text-slate-600">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {logs.map(log => (
-                  <tr key={log.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 text-slate-700 text-xs">{log.to_email || "—"}</td>
-                    <td className="px-3 py-2 text-slate-600 text-xs truncate max-w-xs">{log.subject || "—"}</td>
-                    <td className="px-3 py-2">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        log.status === "Sent" ? "bg-green-100 text-green-700" :
-                        log.status === "Failed" || log.status === "Bounced" ? "bg-red-100 text-red-700" :
-                        log.status === "Replied" ? "bg-blue-100 text-blue-700" :
-                        log.status === "Opened" ? "bg-purple-100 text-purple-700" :
-                        "bg-slate-100 text-slate-600"
-                      }`}>{log.status}</span>
+                {carriers.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 font-medium text-slate-900 truncate max-w-xs">
+                      {c.legal_name || c.dba_name || "Unknown"}
                     </td>
-                    <td className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">
-                      {log.sent_at ? new Date(log.sent_at).toLocaleString() : "—"}
+                    <td className="px-4 py-2 text-slate-600 text-xs truncate max-w-xs">{c.email}</td>
+                    <td className="px-4 py-2 text-slate-600 text-xs">
+                      {c.email_funnel ? (
+                        <span className="font-mono">{c.email_funnel}</span>
+                      ) : (
+                        <span className="text-amber-600">Not assigned</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-center text-slate-600">
+                      {c.email_sequence_step || 0}/5
+                    </td>
+                    <td className="px-4 py-2 text-slate-500 text-xs">
+                      {c.email_next_send_at ? new Date(c.email_next_send_at).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      {c.email_sequence_complete ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Complete</span>
+                      ) : c.email_funnel ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">In Progress</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Queued</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -289,45 +318,17 @@ export default function EmailTesting() {
             </table>
           </div>
         )}
-      </StepCard>
+      </div>
 
-      <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-xs text-blue-700">
-          <strong>Next step:</strong> Once you've confirmed emails arrive in your inbox (check spam folder too),
-          you're ready to send to real scraped carrier emails from the Email Campaigns page.
+      {/* Info banner */}
+      <div className="mt-4 bg-violet-50 border border-violet-200 rounded-lg p-4">
+        <p className="text-xs text-violet-700">
+          <strong>How it works:</strong> The engine runs daily at 9 AM (server-side, no laptop needed).
+          It reads each carrier's data (fleet size, safety rating, equipment type), auto-assigns the best
+          of 10 email funnels, and sends personalized emails with your Tycoon Logistics logo and company details.
+          Each sequence runs 5 emails over 19 days (Day 0, 3, 7, 12, 19). Click "Run Engine Now" to test immediately.
         </p>
       </div>
-    </div>
-  );
-}
-
-function StepCard({ number, title, subtitle, icon: Icon, children }) {
-  return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
-      <div className="flex items-start gap-3 mb-4">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex-shrink-0">
-          {number}
-        </div>
-        <div className="flex-1">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-            <Icon className="w-4 h-4 text-slate-400" />
-            {title}
-          </h2>
-          <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ResultBanner({ result }) {
-  return (
-    <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
-      result.success ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"
-    }`}>
-      {result.success ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-      {result.message}
     </div>
   );
 }

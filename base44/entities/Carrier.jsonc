@@ -169,6 +169,34 @@
     },
     "notes": {
       "type": "string"
+    },
+    "email_funnel": {
+      "type": "string",
+      "description": "Assigned email sequence id (e.g. seq_1)"
+    },
+    "email_funnel_reason": {
+      "type": "string",
+      "description": "Why this funnel was selected for the carrier"
+    },
+    "email_sequence_step": {
+      "type": "number",
+      "default": 0,
+      "description": "Current step in the sequence (0=not started, 1=initial sent, 2-4=follow-ups, 5=breakup)"
+    },
+    "email_next_send_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the next email in the sequence is due"
+    },
+    "email_sequence_complete": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the full email sequence has been sent"
+    },
+    "email_first_sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the initial email was sent"
     }
   },
   "required": [

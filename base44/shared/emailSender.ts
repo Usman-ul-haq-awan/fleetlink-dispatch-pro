@@ -9,9 +9,9 @@ import { secrets } from "base44:runtime";
 // Settings → SMTP Email Server.
 export async function sendEmail(
   base44: any,
-  opts: { to: string; subject: string; body: string; fromName?: string; requireSmtp?: boolean }
+  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; requireSmtp?: boolean }
 ): Promise<{ provider: string; messageId?: string }> {
-  const { to, subject, body, fromName } = opts;
+  const { to, subject, body, html, fromName } = opts;
 
   const apiKey = secrets.get("RESEND_API_KEY");
   if (!apiKey) {
@@ -43,6 +43,7 @@ export async function sendEmail(
       to: [to],
       subject,
       text: body || "",
+      ...(html ? { html } : {}),
     }),
   });
 

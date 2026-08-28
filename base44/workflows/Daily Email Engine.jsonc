@@ -1,0 +1,45 @@
+{
+  "name": "Daily Email Engine",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_email_engine",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "send_batch": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "runEmailBatch",
+            "args": {}
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Send daily email batch",
+            "description": "Auto-assigns funnels and sends due emails to carriers"
+          }
+        }
+      }
+    ]
+  },
+  "description": "Server-side email engine that runs daily at 9 AM \u2014 auto-assigns each carrier to the best email funnel based on their data, then sends the next personalized email in their sequence with the Tycoon Logistics logo and company details. Works even when no laptop or browser is open.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 9 * * *",
+      "one_time_date": null,
+      "timezone": "Asia/Karachi",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  }
+}
