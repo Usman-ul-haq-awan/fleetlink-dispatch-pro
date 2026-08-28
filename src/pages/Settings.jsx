@@ -12,6 +12,8 @@ const SETTING_GROUPS = [
       { key: "company_name", label: "Company Name", type: "string" },
       { key: "company_email", label: "Company Email", type: "string" },
       { key: "company_phone", label: "Company Phone", type: "string" },
+      { key: "company_address", label: "Company Address", type: "string" },
+      { key: "company_website", label: "Company Website", type: "string" },
       { key: "corporate_caller_id", label: "Corporate Caller ID (for voice calls)", type: "string" },
       { key: "dispatch_service_description", label: "Dispatch Service Description", type: "text" },
       { key: "email_signature", label: "Email Signature", type: "text" },
