@@ -16,6 +16,21 @@ export async function listAllCarriers(sort = "-updated_date", max = 500000) {
   return all;
 }
 
+// Paginates through carriers assigned to a specific user (server-side filter).
+export async function listCarriersForUser(userId, sort = "-updated_date", max = 500000) {
+  const limit = 5000;
+  let skip = 0;
+  let all = [];
+  while (all.length < max) {
+    const batch = await base44.entities.Carrier.filter({ assigned_to_user_id: userId }, sort, limit, skip);
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  return all;
+}
+
 // Counts all carriers by paginating with skip. Returns the true total.
 export async function countAllCarriers() {
   const limit = 5000;

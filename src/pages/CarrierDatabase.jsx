@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { listAllCarriers } from "@/lib/paginatedList";
+import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
 
 // Classifies a carrier's operation type from the stored carrier_segment /
@@ -135,13 +135,10 @@ export default function CarrierDatabase() {
   const loadCarriers = useCallback(async (reset = false) => {
     setLoading(true);
     try {
-      const all = await listAllCarriers("-updated_date");
-      let filtered = all;
-
-      // Staff (non-admin) only see carriers allocated to them
-      if (currentUser && !isAdmin) {
-        filtered = filtered.filter(c => c.assigned_to_user_id === currentUser.id);
-      }
+      // Staff (non-admin) only fetch carriers allocated to them (server-side filter)
+      let filtered = (currentUser && !isAdmin)
+        ? await listCarriersForUser(currentUser.id, "-updated_date")
+        : await listAllCarriers("-updated_date");
 
       if (search) {
         const q = search.toLowerCase();

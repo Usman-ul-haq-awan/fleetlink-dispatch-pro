@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
-import { listAllCarriers } from "@/lib/paginatedList";
+import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -25,12 +25,11 @@ export default function Dashboard() {
 
   const loadDashboard = async (user) => {
     try {
-      let carriers = await listAllCarriers("-updated_date");
-      // Staff (non-admin) only see stats for carriers allocated to them
       const isAdmin = user?.role === "admin";
-      if (!isAdmin && user) {
-        carriers = carriers.filter(c => c.assigned_to_user_id === user.id);
-      }
+      // Staff (non-admin) only fetch carriers allocated to them (server-side filter)
+      let carriers = (!isAdmin && user)
+        ? await listCarriersForUser(user.id, "-updated_date")
+        : await listAllCarriers("-updated_date");
       const emails = await base44.entities.EmailLog.list("-sent_at", 200);
       const calls = await base44.entities.CallLog.list("-call_date", 200);
       const handoffs = await base44.entities.Handoff.list("-created_at", 100);
