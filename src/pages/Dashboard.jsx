@@ -13,14 +13,24 @@ export default function Dashboard() {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
-    loadDashboard();
+    base44.auth.me().then(setCurrentUser).catch(() => {});
   }, []);
 
-  const loadDashboard = async () => {
+  useEffect(() => {
+    if (currentUser) loadDashboard(currentUser);
+  }, [currentUser]);
+
+  const loadDashboard = async (user) => {
     try {
-      const carriers = await listAllCarriers("-updated_date");
+      let carriers = await listAllCarriers("-updated_date");
+      // Staff (non-admin) only see stats for carriers allocated to them
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin && user) {
+        carriers = carriers.filter(c => c.assigned_to_user_id === user.id);
+      }
       const emails = await base44.entities.EmailLog.list("-sent_at", 200);
       const calls = await base44.entities.CallLog.list("-call_date", 200);
       const handoffs = await base44.entities.Handoff.list("-created_at", 100);
@@ -93,7 +103,11 @@ export default function Dashboard() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 text-sm mt-1">Carrier dispatch operations overview</p>
+        <p className="text-slate-500 text-sm mt-1">
+          {currentUser?.role === "admin"
+            ? "Carrier dispatch operations overview"
+            : `Your allocated carriers — ${stats.total} assigned to you`}
+        </p>
       </div>
 
       {/* Stat cards */}

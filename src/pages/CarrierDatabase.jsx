@@ -61,7 +61,30 @@ export default function CarrierDatabase() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [searchParams] = useSearchParams();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [commentInputs, setCommentInputs] = useState({});
+  const [savingComment, setSavingComment] = useState(null);
   const PAGE_SIZE = 50;
+
+  useEffect(() => {
+    base44.auth.me().then(setCurrentUser).catch(() => {});
+  }, []);
+
+  const isAdmin = currentUser?.role === "admin";
+
+  const saveComment = async (carrierId, text) => {
+    setSavingComment(carrierId);
+    try {
+      await base44.entities.Carrier.update(carrierId, {
+        staff_comment: text,
+        staff_comment_date: new Date().toISOString(),
+      });
+    } catch (err) {
+      alert("Failed to save comment: " + (err.message || ""));
+    } finally {
+      setSavingComment(null);
+    }
+  };
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -115,6 +138,11 @@ export default function CarrierDatabase() {
       const all = await listAllCarriers("-updated_date");
       let filtered = all;
 
+      // Staff (non-admin) only see carriers allocated to them
+      if (currentUser && !isAdmin) {
+        filtered = filtered.filter(c => c.assigned_to_user_id === currentUser.id);
+      }
+
       if (search) {
         const q = search.toLowerCase();
         filtered = filtered.filter(c =>
@@ -136,9 +164,9 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, safetyFilter, stateFilter, operationFilter]);
+  }, [search, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
 
-  useEffect(() => { loadCarriers(true); }, [loadCarriers]);
+  useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
 
   const handleResearch = async (carrierId, usdot) => {
     setResearching(true);
@@ -323,6 +351,7 @@ export default function CarrierDatabase() {
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Score</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Scraped On</th>
+                  {!isAdmin && <th className="text-left px-4 py-3 font-medium text-slate-600">Approach Result / Comment</th>}
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
@@ -380,6 +409,22 @@ export default function CarrierDatabase() {
                         ? new Date(carrier.last_researched_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
                         : <span className="text-slate-400">—</span>}
                     </td>
+                    {!isAdmin && (
+                      <td className="px-4 py-3 min-w-[200px]">
+                        <textarea
+                          value={commentInputs[carrier.id] !== undefined ? commentInputs[carrier.id] : (carrier.staff_comment || "")}
+                          onChange={(e) => setCommentInputs(prev => ({ ...prev, [carrier.id]: e.target.value }))}
+                          onBlur={(e) => {
+                            const val = e.target.value;
+                            if (val !== (carrier.staff_comment || "")) saveComment(carrier.id, val);
+                          }}
+                          placeholder="Write approach result..."
+                          rows={1}
+                          className="w-full px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                        />
+                        {savingComment === carrier.id && <p className="text-[10px] text-blue-500 mt-0.5">Saving...</p>}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <Link to={`/carriers/${carrier.id}`}

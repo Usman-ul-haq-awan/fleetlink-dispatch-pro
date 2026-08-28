@@ -1,8 +1,9 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listAllCarriers } from "@/lib/paginatedList";
 import {
   Shield, User, Loader2, Eye, ChevronUp, ChevronDown, Mail, KeyRound, Trash2,
-  RefreshCw, Upload, Check, X, Phone, IdCard,
+  RefreshCw, Upload, Check, X, Phone, IdCard, Truck,
 } from "lucide-react";
 
 export default function StaffList({
@@ -19,6 +20,74 @@ export default function StaffList({
   const [savingPhone, setSavingPhone] = useState(null);
   const [uploadingId, setUploadingId] = useState(null);
   const fileInputRefs = useRef({});
+  const [allocCount, setAllocCount] = useState({});
+  const [allocating, setAllocating] = useState(null);
+  const [unassigning, setUnassigning] = useState(null);
+  const [carrierCounts, setCarrierCounts] = useState({});
+  const [allocMsg, setAllocMsg] = useState({});
+
+  const setAllocMessage = (key, type, text) => {
+    setAllocMsg((prev) => ({ ...prev, [key]: { type, text } }));
+    setTimeout(() => setAllocMsg((prev) => ({ ...prev, [key]: undefined })), 4000);
+  };
+
+  // Load carrier allocation counts per user
+  const loadCounts = async () => {
+    try {
+      const all = await listAllCarriers("-updated_date");
+      const counts = {};
+      all.forEach(c => {
+        if (c.assigned_to_user_id) counts[c.assigned_to_user_id] = (counts[c.assigned_to_user_id] || 0) + 1;
+      });
+      setCarrierCounts(counts);
+    } catch {}
+  };
+  useEffect(() => { loadCounts(); }, []);
+
+  const handleAllocate = async (userId, key) => {
+    const count = parseInt(allocCount[key], 10);
+    if (!count || count < 1) return;
+    setAllocating(key);
+    try {
+      const all = await listAllCarriers("-updated_date");
+      // Pick unassigned carriers (no assigned_to_user_id)
+      const unassigned = all.filter(c => !c.assigned_to_user_id);
+      const toAssign = unassigned.slice(0, count);
+      if (toAssign.length === 0) {
+        setAllocMessage(key, "error", "No unassigned carriers available.");
+        return;
+      }
+      // Use updateMany to assign them in one call
+      await base44.entities.Carrier.updateMany(
+        { id: { $in: toAssign.map(c => c.id) } },
+        { $set: { assigned_to_user_id: userId } }
+      );
+      setAllocMessage(key, "success", `${toAssign.length} carriers allocated.`);
+      setAllocCount(prev => ({ ...prev, [key]: "" }));
+      loadCounts();
+    } catch (err) {
+      setAllocMessage(key, "error", err.message || "Allocation failed");
+    } finally {
+      setAllocating(null);
+    }
+  };
+
+  const handleUnassignAll = async (userId, key) => {
+    if (!window.confirm("Return all allocated carriers to the unassigned pool?")) return;
+    setUnassigning(key);
+    try {
+      await base44.entities.Carrier.updateMany(
+        { assigned_to_user_id: userId },
+        { $unset: { assigned_to_user_id: "" } }
+      );
+      setAllocMessage(key, "success", "All carriers unassigned.");
+      loadCounts();
+    } catch (err) {
+      setAllocMessage(key, "error", err.message || "Unassign failed");
+    } finally {
+      setUnassigning(null);
+    }
+  };
 
   const setMsg = (key, type, text) => {
     setActionMsg((prev) => ({ ...prev, [key]: { type, text } }));
@@ -194,6 +263,7 @@ export default function StaffList({
               <th className="text-left px-4 py-2 font-medium text-slate-600">Approval</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Role</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">ID Document</th>
+              <th className="text-center px-4 py-2 font-medium text-slate-600">Carrier Allocation</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Account Actions</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Change Role</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Delete</th>
@@ -201,7 +271,7 @@ export default function StaffList({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {merged.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
+              <tr><td colSpan={10} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
             ) : merged.map((m) => (
               <tr key={m.key} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">
@@ -317,6 +387,53 @@ export default function StaffList({
                           className="hidden"
                         />
                       </>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-2 text-center">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.role === "admin" ? "bg-slate-100 text-slate-500" : (carrierCounts[m.userId] ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-400")}`}>
+                        <Truck className="w-3 h-3" />
+                        {m.role === "admin" ? "All (Admin)" : (carrierCounts[m.userId] || 0)}
+                      </span>
+                      {m.role !== "admin" && (carrierCounts[m.userId] || 0) > 0 && (
+                        <button
+                          onClick={() => handleUnassignAll(m.userId, m.key)}
+                          disabled={unassigning === m.key}
+                          className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                          title="Unassign all carriers"
+                        >
+                          {unassigning === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                    {m.role !== "admin" && (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="1"
+                          value={allocCount[m.key] || ""}
+                          onChange={(e) => setAllocCount(prev => ({ ...prev, [m.key]: e.target.value }))}
+                          placeholder="Count"
+                          disabled={allocating === m.key}
+                          className="w-16 px-1.5 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={() => handleAllocate(m.userId, m.key)}
+                          disabled={allocating === m.key || !allocCount[m.key]}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
+                          title="Allocate unassigned carriers to this staff member"
+                        >
+                          {allocating === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+                          Allocate
+                        </button>
+                      </div>
+                    )}
+                    {allocMsg[m.key] && (
+                      <span className={`text-[10px] ${allocMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
+                        {allocMsg[m.key].text}
+                      </span>
                     )}
                   </div>
                 </td>

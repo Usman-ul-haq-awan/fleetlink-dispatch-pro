@@ -197,6 +197,19 @@
       "type": "string",
       "format": "date-time",
       "description": "When the initial email was sent"
+    },
+    "assigned_to_user_id": {
+      "type": "string",
+      "description": "User ID of the staff member this carrier is allocated to"
+    },
+    "staff_comment": {
+      "type": "string",
+      "description": "Staff member's comment on the result of their approach to this carrier"
+    },
+    "staff_comment_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the staff comment was last updated"
     }
   },
   "required": [
