@@ -2,9 +2,22 @@ import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import {
   Send, Loader2, CheckCircle, AlertCircle, Mail, Zap, Clock,
-  RefreshCw, Truck, TrendingUp, Target, Play, Eye
+  RefreshCw, Truck, TrendingUp, Target, Play, Eye, Power, FileText
 } from "lucide-react";
 import { listAllCarriers } from "@/lib/paginatedList";
+
+const FUNNEL_OPTIONS = [
+  { id: "seq_1", name: "Self-Dispatch Time Reclaim" },
+  { id: "seq_2", name: "Fleet Scaling & Capacity" },
+  { id: "seq_3", name: "New MC Authority Acceleration" },
+  { id: "seq_4", name: "Broker Quality & Risk Mitigation" },
+  { id: "seq_5", name: "No Forced Dispatch Freedom" },
+  { id: "seq_6", name: "Deadhead & Lane Optimization" },
+  { id: "seq_7", name: "Transparent Financial Structure" },
+  { id: "seq_8", name: "24/7/365 Back-Office Support" },
+  { id: "seq_9", name: "Growth & Equipment Expansion" },
+  { id: "seq_10", name: "Premium Consultative Partnership" },
+];
 
 export default function EmailTesting() {
   const [stats, setStats] = useState({ total: 0, eligible: 0, assigned: 0, sent: 0, completed: 0, dueToday: 0 });
@@ -14,7 +27,13 @@ export default function EmailTesting() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState(null);
-  const [filter, setFilter] = useState("all"); // all | unassigned | in_progress | completed
+  const [filter, setFilter] = useState("all");
+  const [engineEnabled, setEngineEnabled] = useState(false);
+  const [togglingEngine, setTogglingEngine] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewSeq, setPreviewSeq] = useState("seq_1");
+  const [previewStep, setPreviewStep] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +99,55 @@ export default function EmailTesting() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Load engine enabled state
+  useEffect(() => {
+    base44.entities.AppSetting.filter({ setting_key: "email_engine_enabled" })
+      .then((rows) => setEngineEnabled(rows.length === 0 || rows[0].setting_value !== "false"))
+      .catch(() => setEngineEnabled(true));
+  }, []);
+
+  const toggleEngine = async () => {
+    setTogglingEngine(true);
+    try {
+      const rows = await base44.entities.AppSetting.filter({ setting_key: "email_engine_enabled" });
+      const newValue = !(rows.length === 0 || rows[0].setting_value !== "false");
+      if (rows.length > 0) {
+        await base44.entities.AppSetting.update(rows[0].id, { setting_value: String(newValue) });
+      } else {
+        await base44.entities.AppSetting.create({
+          setting_key: "email_engine_enabled",
+          setting_value: String(newValue),
+          setting_category: "email",
+          setting_type: "boolean",
+          description: "Email Engine running state",
+        });
+      }
+      setEngineEnabled(newValue);
+    } catch (err) {
+      alert("Toggle failed: " + err.message);
+    } finally {
+      setTogglingEngine(false);
+    }
+  };
+
+  // Load email format preview
+  const loadPreview = useCallback(async () => {
+    setPreviewLoading(true);
+    try {
+      const res = await base44.functions.invoke("previewEmailFormat", {
+        sequence_id: previewSeq,
+        step: previewStep,
+      });
+      setPreviewHtml(res.data.html || "");
+    } catch (err) {
+      setPreviewHtml(`<p style="color:red;padding:20px;">Preview failed: ${err.message}</p>`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [previewSeq, previewStep]);
+
+  useEffect(() => { loadPreview(); }, [loadPreview]);
+
   const runNow = async () => {
     setRunning(true);
     setRunResult(null);
@@ -125,12 +193,34 @@ export default function EmailTesting() {
           <p className="text-slate-500 text-sm mt-1">
             Server-side automated outreach — runs daily at 9 AM even when your laptop is off
           </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Every email is CC'd to <span className="font-medium text-slate-600">tycoon.tours.business@gmail.com</span>
+          </p>
         </div>
-        <button onClick={runNow} disabled={running}
-          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
-          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          {running ? "Running..." : "Run Engine Now"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleEngine} disabled={togglingEngine}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 ${
+              engineEnabled ? "bg-red-600 text-white hover:bg-red-700" : "bg-green-600 text-white hover:bg-green-700"
+            }`}>
+            {togglingEngine ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+            {engineEnabled ? "Stop Engine" : "Start Engine"}
+          </button>
+          <button onClick={runNow} disabled={running || !engineEnabled}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+            {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            {running ? "Running..." : "Run Now"}
+          </button>
+        </div>
+      </div>
+
+      {/* Engine status banner */}
+      <div className={`rounded-lg border p-3 mb-4 flex items-center gap-2 ${
+        engineEnabled ? "bg-green-50 border-green-200" : "bg-slate-100 border-slate-300"
+      }`}>
+        <span className={`w-2.5 h-2.5 rounded-full ${engineEnabled ? "bg-green-500 animate-pulse" : "bg-slate-400"}`} />
+        <p className="text-sm font-medium text-slate-700">
+          {engineEnabled ? "Engine is running — daily emails will send automatically at 9 AM." : "Engine is stopped — no emails will send until you click Start."}
+        </p>
       </div>
 
       {/* Run result banner */}
@@ -318,6 +408,52 @@ export default function EmailTesting() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Email format preview */}
+      <div className="mt-6 bg-white rounded-lg border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 flex-wrap gap-3">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            Email Format Preview
+          </h2>
+          <div className="flex items-center gap-2">
+            <select value={previewSeq} onChange={e => setPreviewSeq(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              {FUNNEL_OPTIONS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <select value={previewStep} onChange={e => setPreviewStep(parseInt(e.target.value))}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value={0}>Step 1 — Initial</option>
+              <option value={1}>Step 2 — Follow-up</option>
+              <option value={2}>Step 3 — Follow-up</option>
+              <option value={3}>Step 4 — Follow-up</option>
+              <option value={4}>Step 5 — Breakup</option>
+            </select>
+            <button onClick={loadPreview} disabled={previewLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-50">
+              {previewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div className="p-2 bg-slate-50">
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-slate-300 animate-spin" />
+            </div>
+          ) : (
+            <iframe
+              srcDoc={previewHtml}
+              title="Email Preview"
+              className="w-full bg-white rounded border border-slate-200"
+              style={{ height: "500px" }}
+            />
+          )}
+        </div>
+        <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
+          This is the exact HTML format sent to carriers — with Tycoon Logistics logo, personalized body, and company footer. All emails CC tycoon.tours.business@gmail.com.
+        </div>
       </div>
 
       {/* Info banner */}

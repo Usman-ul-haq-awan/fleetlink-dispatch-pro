@@ -48,6 +48,12 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ success: true, skipped: true, message: "Automation is paused in Settings." });
     }
 
+    // Check if the email engine is enabled (toggled from the Email Engine page)
+    const engineSetting = await svc.entities.AppSetting.filter({ setting_key: "email_engine_enabled" });
+    if (engineSetting.length > 0 && engineSetting[0].setting_value === "false") {
+      return Response.json({ success: true, skipped: true, message: "Email engine is stopped. Click Start on the Email Engine page to resume." });
+    }
+
     // Load all carriers (paginated to bypass the 500 cap)
     const allCarriers: any[] = [];
     let offset = 0;

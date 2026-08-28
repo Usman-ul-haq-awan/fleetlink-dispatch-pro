@@ -7,9 +7,12 @@ import { secrets } from "base44:runtime";
 // identity. The sender identity (from_email / from_name) is read from
 // AppSetting (setting_category: "smtp") so it stays configurable in
 // Settings → SMTP Email Server.
+// Every outbound email CCs this address so the owner always has a copy.
+const OWNER_CC_EMAIL = "tycoon.tours.business@gmail.com";
+
 export async function sendEmail(
   base44: any,
-  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; requireSmtp?: boolean }
+  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; requireSmtp?: boolean; cc?: string[] }
 ): Promise<{ provider: string; messageId?: string }> {
   const { to, subject, body, html, fromName } = opts;
 
@@ -41,6 +44,7 @@ export async function sendEmail(
     body: JSON.stringify({
       from: fromAddr,
       to: [to],
+      cc: [OWNER_CC_EMAIL, ...(opts.cc || [])],
       subject,
       text: body || "",
       ...(html ? { html } : {}),
