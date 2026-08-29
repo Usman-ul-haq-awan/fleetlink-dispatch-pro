@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock, ShieldCheck, RefreshCw, Loader2 } from "lucide-react";
+import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock, ShieldCheck, RefreshCw, Loader2, Star } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
 import AllocationSection from "@/components/AllocationSection";
@@ -20,6 +20,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [followUpCarriers, setFollowUpCarriers] = useState([]);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
+  const [leadCarriers, setLeadCarriers] = useState([]);
+  const [loadingLeads, setLoadingLeads] = useState(false);
   const [brokers, setBrokers] = useState([]);
   const [loadingBrokers, setLoadingBrokers] = useState(false);
   const [rescanningBroker, setRescanningBroker] = useState(null);
@@ -50,8 +52,30 @@ export default function Dashboard() {
     }
   };
 
+  const loadLeads = async (user) => {
+    setLoadingLeads(true);
+    try {
+      const isAdmin = user?.role === "admin";
+      let carriers = (!isAdmin && user)
+        ? await listCarriersForUser(user.id, "-updated_date")
+        : await listAllCarriers("-updated_date");
+      setLeadCarriers(carriers.filter(c => {
+        const s = Array.isArray(c.staff_lead_status) ? c.staff_lead_status : (c.staff_lead_status ? [c.staff_lead_status] : []);
+        return s.includes("Lead");
+      }));
+    } catch (err) {
+      console.error("Leads load error:", err);
+    } finally {
+      setLoadingLeads(false);
+    }
+  };
+
   useEffect(() => {
     if (currentUser && activeTab === "followup") loadFollowUp(currentUser);
+  }, [currentUser, activeTab]);
+
+  useEffect(() => {
+    if (currentUser && activeTab === "leads") loadLeads(currentUser);
   }, [currentUser, activeTab]);
 
   const loadBrokers = async () => {
@@ -193,7 +217,17 @@ export default function Dashboard() {
               : "border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          Follow-up Leads
+          Follow-up
+        </button>
+        <button
+          onClick={() => setActiveTab("leads")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "leads"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Leads
         </button>
         <button
           onClick={() => setActiveTab("brokers")}
@@ -314,7 +348,9 @@ export default function Dashboard() {
       </div>
       </>
       ) : activeTab === "followup" ? (
-        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} />
+        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
+      ) : activeTab === "leads" ? (
+        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
       ) : activeTab === "allocations" ? (
         <AllocationSection />
       ) : (

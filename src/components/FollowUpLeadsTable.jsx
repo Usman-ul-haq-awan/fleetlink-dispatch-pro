@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Clock, Eye } from "lucide-react";
 
-export default function FollowUpLeadsTable({ carriers, loading }) {
+export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clock, emptyText = 'No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.' }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -14,9 +14,9 @@ export default function FollowUpLeadsTable({ carriers, loading }) {
   if (carriers.length === 0) {
     return (
       <div className="text-center py-16">
-        <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <Icon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
         <p className="text-slate-500">
-          No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.
+          {emptyText}
         </p>
       </div>
     );
