@@ -33,6 +33,9 @@ export default function BrokerVetting() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
   const [rescanning, setRescanning] = useState(null);
+  const [researching, setResearching] = useState(null);
+  const [researchingAll, setResearchingAll] = useState(false);
+  const [researchMsg, setResearchMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +138,45 @@ export default function BrokerVetting() {
     }
   };
 
+  const handleResearch = async (b) => {
+    setResearching(b.id);
+    setResearchMsg("");
+    try {
+      const res = await base44.functions.invoke("researchBroker", { broker_id: b.id });
+      const d = res.data || res;
+      if (d.success) {
+        setResearchMsg(`Researched "${b.broker_name}" — authority: ${d.authority_status}, bond: ${d.bond_type || "Not Verified"}, score: ${d.vetting_score} (${d.vetting_rating}).`);
+      } else {
+        setResearchMsg(`Research failed for "${b.broker_name}": ${(d.errors || []).join("; ") || "unknown error"}`);
+      }
+      load();
+      if (detail?.id === b.id) setDetail({ ...b, vetting_score: d.vetting_score, vetting_rating: d.vetting_rating, authority_status: d.authority_status });
+    } catch (err) {
+      setResearchMsg("Research failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setResearching(null);
+    }
+  };
+
+  const handleResearchAll = async () => {
+    setResearchingAll(true);
+    setResearchMsg("");
+    let succeeded = 0;
+    let failed = 0;
+    for (const b of brokers) {
+      if (!b.mc_number && !b.usdot_number) { failed++; continue; }
+      try {
+        const res = await base44.functions.invoke("researchBroker", { broker_id: b.id });
+        if (res.data?.success || res.success) succeeded++; else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setResearchMsg(`Researched ${succeeded + failed} brokers — ${succeeded} succeeded, ${failed} failed.`);
+    load();
+    setResearchingAll(false);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -145,6 +187,11 @@ export default function BrokerVetting() {
           <p className="text-slate-500 text-sm mt-1">{brokers.length} brokers — verify authority, bond, payment reputation & load legitimacy</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={handleResearchAll} disabled={researchingAll || brokers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+            {researchingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            Research All
+          </button>
           <button onClick={handleSync} disabled={syncing}
             className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
             {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
@@ -158,6 +205,9 @@ export default function BrokerVetting() {
 
       {syncMsg && (
         <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 mb-4 text-sm text-violet-800">{syncMsg}</div>
+      )}
+      {researchMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4 text-sm text-emerald-800">{researchMsg}</div>
       )}
 
       {/* Filters */}
@@ -229,6 +279,9 @@ export default function BrokerVetting() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setDetail(b)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => handleResearch(b)} disabled={researching === b.id || (!b.mc_number && !b.usdot_number)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded disabled:opacity-50" title="Research FMCSA authority & bond">
+                          {researching === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                        </button>
                         <button onClick={() => handleRescan(b)} disabled={rescanning === b.id} className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded disabled:opacity-50" title="Re-scan score">
                           {rescanning === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                         </button>
