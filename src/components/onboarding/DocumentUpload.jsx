@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Upload, FileText, Eye, Loader2, CheckCircle, X } from "lucide-react";
+import DocumentPreview from "./DocumentPreview";
 
 export default function DocumentUpload({ label, docUrl, docName, recordId, fieldUrl, fieldName, onUploaded }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const fileRef = useRef(null);
 
   const handleUpload = async (file) => {
@@ -53,24 +55,20 @@ export default function DocumentUpload({ label, docUrl, docName, recordId, field
       {docUrl ? (
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          <a
-            href={docUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline truncate flex-1"
+          <button
+            onClick={() => setPreviewOpen(true)}
+            className="text-xs text-blue-600 hover:underline truncate flex-1 text-left"
             title={docName}
           >
             {docName || "View document"}
-          </a>
-          <a
-            href={docUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          </button>
+          <button
+            onClick={() => setPreviewOpen(true)}
             className="text-slate-400 hover:text-blue-600"
-            title="View"
+            title="Preview"
           >
             <Eye className="w-4 h-4" />
-          </a>
+          </button>
           <button
             onClick={handleRemove}
             className="text-red-400 hover:text-red-600"
@@ -104,6 +102,12 @@ export default function DocumentUpload({ label, docUrl, docName, recordId, field
           e.target.value = "";
         }}
         className="hidden"
+      />
+      <DocumentPreview
+        docUrl={docUrl}
+        docName={docName}
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
       />
     </div>
   );
