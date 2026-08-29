@@ -219,6 +219,8 @@
     "staff_lead_status": {
       "type": "string",
       "enum": [
+        "Not Approached",
+        "Approached",
         "Lead",
         "Dead Lead",
         "Follow-up",

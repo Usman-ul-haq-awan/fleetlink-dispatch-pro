@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Loader2, Target, XCircle, Clock, UserCheck, Voicemail, PhoneOff } from "lucide-react";
+import { Loader2, Target, XCircle, Clock, UserCheck, Voicemail, PhoneOff, CheckCircle, Circle } from "lucide-react";
 
 const STATUS_OPTIONS = [
+  { value: "Not Approached", label: "Not Approached", icon: Circle, activeClass: "bg-slate-500 text-white border-slate-500", inactiveClass: "text-slate-700 border-slate-300 hover:bg-slate-100" },
+  { value: "Approached", label: "Approached", icon: CheckCircle, activeClass: "bg-emerald-600 text-white border-emerald-600", inactiveClass: "text-emerald-700 border-emerald-200 hover:bg-emerald-50" },
   { value: "Lead", label: "Lead", icon: Target, activeClass: "bg-blue-600 text-white border-blue-600", inactiveClass: "text-blue-700 border-blue-200 hover:bg-blue-50" },
   { value: "Dead Lead", label: "Dead Lead", icon: XCircle, activeClass: "bg-red-600 text-white border-red-600", inactiveClass: "text-red-700 border-red-200 hover:bg-red-50" },
   { value: "Follow-up", label: "Follow-up", icon: Clock, activeClass: "bg-amber-500 text-white border-amber-500", inactiveClass: "text-amber-700 border-amber-200 hover:bg-amber-50" },
