@@ -50,6 +50,7 @@ export default function CarrierDatabase() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [mcSearch, setMcSearch] = useState("");
+  const [phoneSearch, setPhoneSearch] = useState("");
   const [allocatedDate, setAllocatedDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [safetyFilter, setSafetyFilter] = useState("");
@@ -155,6 +156,10 @@ export default function CarrierDatabase() {
         const mcq = mcSearch.toLowerCase();
         filtered = filtered.filter(c => (c.mc_number || "").toLowerCase().includes(mcq));
       }
+      if (phoneSearch) {
+        const pq = phoneSearch.toLowerCase();
+        filtered = filtered.filter(c => (c.phone || "").toLowerCase().includes(pq));
+      }
       if (allocatedDate) {
         filtered = filtered.filter(c => c.assigned_date && c.assigned_date.split("T")[0] === allocatedDate);
       }
@@ -170,7 +175,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, mcSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
+  }, [search, mcSearch, phoneSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
 
   useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
 
@@ -327,6 +332,16 @@ export default function CarrierDatabase() {
               placeholder="Search by MC number..."
               value={mcSearch}
               onChange={e => setMcSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by phone..."
+              value={phoneSearch}
+              onChange={e => setPhoneSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
