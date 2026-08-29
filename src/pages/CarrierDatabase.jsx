@@ -470,6 +470,7 @@ export default function CarrierDatabase() {
                             carrier.staff_lead_status === "Dead Lead" ? "bg-red-100 text-red-700" :
                             carrier.staff_lead_status === "Follow-up" ? "bg-amber-100 text-amber-700" :
                             carrier.staff_lead_status === "Voicemail Left" ? "bg-cyan-100 text-cyan-700" :
+                            carrier.staff_lead_status === "Hangup" ? "bg-slate-200 text-slate-700" :
                             carrier.staff_lead_status === "Onboard" ? "bg-green-100 text-green-700" :
                             "bg-slate-100 text-slate-600"
                           }`}>{carrier.staff_lead_status}</span>

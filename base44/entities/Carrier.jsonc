@@ -223,6 +223,7 @@
         "Dead Lead",
         "Follow-up",
         "Voicemail Left",
+        "Hangup",
         "Onboard"
       ],
       "description": "Staff-assigned lead classification for back-office follow-up"
