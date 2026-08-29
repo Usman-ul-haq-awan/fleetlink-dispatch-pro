@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { ClipboardCheck, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { ClipboardCheck, ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
 import OnboardingDetail from "@/components/onboarding/OnboardingDetail";
+import StartOnboardingModal from "@/components/onboarding/StartOnboardingModal";
 
 const STATUSES = [
   "New",
@@ -29,6 +30,7 @@ export default function OnboardingPage() {
   const [carriers, setCarriers] = useState({});
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [showStartModal, setShowStartModal] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -88,11 +90,20 @@ export default function OnboardingPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Onboarding</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          {onboardingRecords.length} carriers in onboarding pipeline
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Onboarding</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            {onboardingRecords.length} carriers in onboarding pipeline
+          </p>
+        </div>
+        <button
+          onClick={() => setShowStartModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+        >
+          <Plus className="w-4 h-4" />
+          Start Onboarding
+        </button>
       </div>
 
       {loading ? (
@@ -102,9 +113,16 @@ export default function OnboardingPage() {
       ) : onboardingRecords.length === 0 ? (
         <div className="text-center py-16">
           <ClipboardCheck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500">
-            No carriers in onboarding. Move hot leads to onboarding from the Human Handoff page.
+          <p className="text-slate-500 mb-4">
+            No carriers in onboarding yet. Click "Start Onboarding" above to select a carrier and begin the process.
           </p>
+          <button
+            onClick={() => setShowStartModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Start Onboarding
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -211,6 +229,13 @@ export default function OnboardingPage() {
           })}
         </div>
       )}
+
+      <StartOnboardingModal
+        open={showStartModal}
+        onClose={() => setShowStartModal(false)}
+        existingCarrierIds={new Set(onboardingRecords.map((r) => r.carrier_id))}
+        onCreated={load}
+      />
     </div>
   );
 }
