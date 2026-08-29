@@ -13,14 +13,32 @@ const STATUS_OPTIONS = [
   { value: "Onboard", label: "Onboard", icon: UserCheck, activeClass: "bg-green-600 text-white border-green-600", inactiveClass: "text-green-700 border-green-200 hover:bg-green-50" },
 ];
 
+// Normalize stored value into an array of status strings.
+const normalizeStatuses = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value.trim()) return [value];
+  return [];
+};
+
 export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated }) {
   const [setting, setSetting] = useState(null);
+  const selected = normalizeStatuses(carrier.staff_lead_status);
 
-  const handleSet = async (status) => {
+  const handleToggle = async (status) => {
     setSetting(status);
     try {
-      const updates = { staff_lead_status: status };
-      if (status === "Onboard") {
+      let next;
+      if (selected.includes(status)) {
+        next = selected.filter(s => s !== status);
+      } else {
+        next = [...selected, status];
+      }
+
+      const updates = { staff_lead_status: next };
+
+      // Onboard special handling: if "Onboard" is being added, set lead_status
+      // and create an onboarding record if none exists.
+      if (status === "Onboard" && next.includes("Onboard")) {
         updates.lead_status = "Onboarding";
         if (!existingOnboarding) {
           await base44.entities.Onboarding.create({
@@ -31,6 +49,7 @@ export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated })
           });
         }
       }
+
       await base44.entities.Carrier.update(carrier.id, updates);
       onUpdated();
     } catch (err) {
@@ -46,11 +65,11 @@ export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated })
         <span className="text-sm font-medium text-slate-700">Mark as:</span>
         {STATUS_OPTIONS.map(opt => {
           const Icon = opt.icon;
-          const isActive = carrier.staff_lead_status === opt.value;
+          const isActive = selected.includes(opt.value);
           return (
             <button
               key={opt.value}
-              onClick={() => handleSet(opt.value)}
+              onClick={() => handleToggle(opt.value)}
               disabled={setting !== null}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 ${
                 isActive ? opt.activeClass : opt.inactiveClass
@@ -61,10 +80,25 @@ export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated })
             </button>
           );
         })}
-        {carrier.staff_lead_status && (
-          <span className="text-xs text-slate-400 ml-auto">
-            Currently marked: <strong className="text-slate-600">{carrier.staff_lead_status}</strong>
-          </span>
+      </div>
+
+      {/* Selected statuses display */}
+      <div className="mt-3 pt-3 border-t border-slate-100">
+        <span className="text-xs font-medium text-slate-500">Selected statuses: </span>
+        {selected.length === 0 ? (
+          <span className="text-xs text-slate-400">None</span>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {selected.map(status => {
+              const opt = STATUS_OPTIONS.find(o => o.value === status);
+              const cls = opt ? opt.activeClass : "bg-slate-100 text-slate-700 border-slate-300";
+              return (
+                <span key={status} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cls}`}>
+                  {status}
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

@@ -217,18 +217,21 @@
       "description": "When the staff comment was last updated"
     },
     "staff_lead_status": {
-      "type": "string",
-      "enum": [
-        "Not Approached",
-        "Approached",
-        "Lead",
-        "Dead Lead",
-        "Follow-up",
-        "Voicemail Left",
-        "Hangup",
-        "Onboard"
-      ],
-      "description": "Staff-assigned lead classification for back-office follow-up"
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "Not Approached",
+          "Approached",
+          "Lead",
+          "Dead Lead",
+          "Follow-up",
+          "Voicemail Left",
+          "Hangup",
+          "Onboard"
+        ]
+      },
+      "description": "Staff-assigned lead classifications (multi-select) for back-office follow-up"
     }
   },
   "required": [

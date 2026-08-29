@@ -58,7 +58,7 @@ export default async function(req: Request): Promise<Response> {
     ];
 
     const rows = carriers.map(c => [
-      c.staff_lead_status || "", c.staff_comment || "", c.assigned_date || "",
+      Array.isArray(c.staff_lead_status) ? c.staff_lead_status.join(" | ") : (c.staff_lead_status || ""), c.staff_comment || "", c.assigned_date || "",
       c.legal_name || "", c.dba_name || "", c.usdot_number || "", c.mc_number || "", c.mx_number || "",
       c.lead_status || "", c.operating_status || "",
       c.address || "", c.city || "", c.state || "", c.zip || "",

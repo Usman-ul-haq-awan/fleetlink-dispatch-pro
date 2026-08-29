@@ -34,7 +34,10 @@ export default function Dashboard() {
       let carriers = (!isAdmin && user)
         ? await listCarriersForUser(user.id, "-updated_date")
         : await listAllCarriers("-updated_date");
-      setFollowUpCarriers(carriers.filter(c => c.staff_lead_status === "Follow-up"));
+      setFollowUpCarriers(carriers.filter(c => {
+        const s = Array.isArray(c.staff_lead_status) ? c.staff_lead_status : (c.staff_lead_status ? [c.staff_lead_status] : []);
+        return s.includes("Follow-up");
+      }));
     } catch (err) {
       console.error("Follow-up load error:", err);
     } finally {

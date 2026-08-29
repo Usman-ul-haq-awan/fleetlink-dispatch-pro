@@ -196,7 +196,7 @@ export default function CarrierDatabase() {
     setExporting(true);
     try {
       const rows = carriers.map(c => ({
-        "Staff Lead Status": c.staff_lead_status || "",
+        "Staff Lead Status": Array.isArray(c.staff_lead_status) ? c.staff_lead_status.join(", ") : (c.staff_lead_status || ""),
         "Staff Comment": c.staff_comment || "",
         "Allocated On": c.assigned_date || "",
         "Legal Name": c.legal_name || "",
@@ -479,21 +479,31 @@ export default function CarrierDatabase() {
                     </td>
                     {!isAdmin && (
                       <td className="px-4 py-3">
-                        {carrier.staff_lead_status ? (
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                            carrier.staff_lead_status === "Not Approached" ? "bg-slate-100 text-slate-500" :
-                            carrier.staff_lead_status === "Approached" ? "bg-emerald-100 text-emerald-700" :
-                            carrier.staff_lead_status === "Lead" ? "bg-blue-100 text-blue-700" :
-                            carrier.staff_lead_status === "Dead Lead" ? "bg-red-100 text-red-700" :
-                            carrier.staff_lead_status === "Follow-up" ? "bg-amber-100 text-amber-700" :
-                            carrier.staff_lead_status === "Voicemail Left" ? "bg-cyan-100 text-cyan-700" :
-                            carrier.staff_lead_status === "Hangup" ? "bg-slate-200 text-slate-700" :
-                            carrier.staff_lead_status === "Onboard" ? "bg-green-100 text-green-700" :
-                            "bg-slate-100 text-slate-600"
-                          }`}>{carrier.staff_lead_status}</span>
-                        ) : (
-                          <span className="text-xs text-slate-400">Not approached</span>
-                        )}
+                        {(() => {
+                          const statuses = Array.isArray(carrier.staff_lead_status)
+                            ? carrier.staff_lead_status
+                            : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []);
+                          if (statuses.length === 0) {
+                            return <span className="text-xs text-slate-400">Not approached</span>;
+                          }
+                          return (
+                            <div className="flex flex-wrap gap-1">
+                              {statuses.map(s => (
+                                <span key={s} className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                                  s === "Not Approached" ? "bg-slate-100 text-slate-500" :
+                                  s === "Approached" ? "bg-emerald-100 text-emerald-700" :
+                                  s === "Lead" ? "bg-blue-100 text-blue-700" :
+                                  s === "Dead Lead" ? "bg-red-100 text-red-700" :
+                                  s === "Follow-up" ? "bg-amber-100 text-amber-700" :
+                                  s === "Voicemail Left" ? "bg-cyan-100 text-cyan-700" :
+                                  s === "Hangup" ? "bg-slate-200 text-slate-700" :
+                                  s === "Onboard" ? "bg-green-100 text-green-700" :
+                                  "bg-slate-100 text-slate-600"
+                                }`}>{s}</span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </td>
                     )}
                     {!isAdmin && (
