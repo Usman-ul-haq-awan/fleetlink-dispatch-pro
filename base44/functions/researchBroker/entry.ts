@@ -29,11 +29,13 @@ function buildSaferUrl(usdot?: string, mc?: string): string {
   return `https://safer.fmcsa.dot.gov/query.asp?query_type=queryCarrierSnapshot&query_param=${param}&query_string=${encodeURIComponent(value)}`;
 }
 
-// Parse the FMCSA Licensing & Insurance page for broker bond (process agent / trust) info.
+// Parse the FMCSA Licensing & Insurance page for broker bond (process agent / trust) info
+// and the authority grant date (used to derive years_active).
 function parseBondInfo(html: string): {
   bondType: string;
   bondAmount: number | null;
   bondActive: boolean;
+  grantDate: string | null;
 } {
   const text = stripHtml(html);
   const lower = text.toLowerCase();
@@ -68,7 +70,16 @@ function parseBondInfo(html: string): {
     if (stdMatch) bondAmount = 75000;
   }
 
-  return { bondType, bondAmount, bondActive };
+  // Extract authority grant date (e.g., "Grant Date: 01/15/2018" or "Authority Granted: 2018-01-15")
+  let grantDate: string | null = null;
+  const grantMatch = text.match(/(?:grant\s+date|authority\s+granted|granted\s+on)\s*:?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/i);
+  if (grantMatch) {
+    const raw = grantMatch[1];
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) grantDate = parsed.toISOString();
+  }
+
+  return { bondType, bondAmount, bondActive, grantDate };
 }
 
 export default async function(req: Request): Promise<Response> {
@@ -180,6 +191,11 @@ export default async function(req: Request): Promise<Response> {
         update.bond_verified = bond.bondType !== "Not Verified";
         update.bond_active = bond.bondActive;
         if (bond.bondAmount !== null) update.bond_amount = bond.bondAmount;
+        // Derive years_active from the authority grant date (only if not manually set or empty)
+        if (bond.grantDate && (!broker.years_active || broker.years_active === 0)) {
+          const years = Math.floor((Date.now() - new Date(bond.grantDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          if (years >= 0) update.years_active = years;
+        }
         stepsCompleted.push("insurance");
       } else {
         errors.push(`Insurance page fetch failed (status ${insResult.status})`);
