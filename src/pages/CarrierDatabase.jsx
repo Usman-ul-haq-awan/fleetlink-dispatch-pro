@@ -192,6 +192,9 @@ export default function CarrierDatabase() {
     setExporting(true);
     try {
       const rows = carriers.map(c => ({
+        "Staff Lead Status": c.staff_lead_status || "",
+        "Staff Comment": c.staff_comment || "",
+        "Allocated On": c.assigned_date || "",
         "Legal Name": c.legal_name || "",
         "DBA Name": c.dba_name || "",
         "USDOT": c.usdot_number || "",
@@ -212,9 +215,6 @@ export default function CarrierDatabase() {
         "Lead Score": c.lead_score ?? "",
         "Lead Status": c.lead_status || "",
         "Last Researched": c.last_researched_at || "",
-        "Staff Lead Status": c.staff_lead_status || "",
-        "Staff Comment": c.staff_comment || "",
-        "Allocated On": c.assigned_date || "",
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));

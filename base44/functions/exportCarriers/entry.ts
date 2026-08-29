@@ -48,16 +48,17 @@ export default async function(req: Request): Promise<Response> {
 
     // Build CSV
     const headers = [
+      "Staff Lead Status", "Staff Comment", "Allocated On",
       "Carrier Name", "DBA", "USDOT", "MC", "MX", "Status", "Operating Status",
       "Address", "City", "State", "ZIP", "Phone", "Fax", "Email", "Owner", "Contact",
       "Power Units", "Drivers", "Cargo", "Carrier Segment",
       "Equipment Type", "Safety Qualification", "Safety Rating",
       "Total Inspections", "OOS Info", "Total Crashes", "Fatal Crashes", "Injury Crashes", "Towaway Crashes",
       "Lead Score", "Lead Status", "Source URLs", "Last Verified",
-      "Staff Lead Status", "Staff Comment", "Allocated On",
     ];
 
     const rows = carriers.map(c => [
+      c.staff_lead_status || "", c.staff_comment || "", c.assigned_date || "",
       c.legal_name || "", c.dba_name || "", c.usdot_number || "", c.mc_number || "", c.mx_number || "",
       c.lead_status || "", c.operating_status || "",
       c.address || "", c.city || "", c.state || "", c.zip || "",
@@ -68,7 +69,6 @@ export default async function(req: Request): Promise<Response> {
       c.lead_score ?? "", c.lead_status || "",
       (evidenceByCarrier[c.id] || []).join(" | "),
       c.last_researched_at || "",
-      c.staff_lead_status || "", c.staff_comment || "", c.assigned_date || "",
     ]);
 
     const csv = [headers, ...rows]
