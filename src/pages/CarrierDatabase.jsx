@@ -435,15 +435,16 @@ export default function CarrierDatabase() {
             <table className="min-w-full w-max text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
-                  <th className="px-3 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={carriers.length > 0 && selectedIds.size === carriers.length}
-                      onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
-                   <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
+                   <th className="text-center px-3 py-3 font-medium text-slate-600 w-10">#</th>
+                   <th className="px-3 py-3 text-center">
+                     <input
+                       type="checkbox"
+                       checked={carriers.length > 0 && selectedIds.size === carriers.length}
+                       onChange={toggleSelectAll}
+                       className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                     />
+                   </th>
+                    <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">USDOT</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">MC</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">State</th>
@@ -461,16 +462,17 @@ export default function CarrierDatabase() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {carriers.map(carrier => (
-                  <tr key={carrier.id} className={`hover:bg-slate-50 ${selectedIds.has(carrier.id) ? "bg-blue-50" : ""}`}>
-                    <td className="px-3 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(carrier.id)}
-                        onChange={() => toggleSelect(carrier.id)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </td>
+                {carriers.map((carrier, idx) => (
+                   <tr key={carrier.id} className={`hover:bg-slate-50 ${selectedIds.has(carrier.id) ? "bg-blue-50" : ""}`}>
+                     <td className="px-3 py-3 text-center text-xs font-medium text-slate-400">{page * PAGE_SIZE + idx + 1}</td>
+                     <td className="px-3 py-3 text-center">
+                       <input
+                         type="checkbox"
+                         checked={selectedIds.has(carrier.id)}
+                         onChange={() => toggleSelect(carrier.id)}
+                         className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                       />
+                     </td>
                     <td className="px-4 py-3">
                       <Link to={`/carriers/${carrier.id}`} className="font-medium text-slate-900 hover:text-blue-600">
                         {carrier.legal_name || carrier.dba_name || "Unknown"}
