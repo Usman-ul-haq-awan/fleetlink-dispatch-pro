@@ -149,6 +149,17 @@ export default function CarrierDetail() {
               DO NOT CONTACT
             </span>
           )}
+          {relatedData.emails.filter(e => e.status === "Sent").length > 0 ? (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 flex items-center gap-1">
+              <Mail className="w-3 h-3" />
+              Email: Approached ({relatedData.emails.filter(e => e.status === "Sent").length} sent)
+            </span>
+          ) : (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+              <Mail className="w-3 h-3" />
+              Email: Not Approached
+            </span>
+          )}
         </div>
       </div>
 
