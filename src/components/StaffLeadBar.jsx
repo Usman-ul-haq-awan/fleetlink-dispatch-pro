@@ -34,6 +34,8 @@ export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated })
       await base44.entities.Carrier.update(carrier.id, {
         staff_comment: text,
         staff_comment_date: new Date().toISOString(),
+        // Normalize legacy single-string values to array so schema validation passes
+        staff_lead_status: normalizeStatuses(carrier.staff_lead_status),
       });
       onUpdated();
     } catch (err) {

@@ -75,12 +75,17 @@ export default function CarrierDatabase() {
 
   const isAdmin = currentUser?.role === "admin";
 
-  const saveComment = async (carrierId, text) => {
-    setSavingComment(carrierId);
+  const saveComment = async (carrier, text) => {
+    setSavingComment(carrier.id);
     try {
-      await base44.entities.Carrier.update(carrierId, {
+      const statuses = Array.isArray(carrier.staff_lead_status)
+        ? carrier.staff_lead_status
+        : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []);
+      await base44.entities.Carrier.update(carrier.id, {
         staff_comment: text,
         staff_comment_date: new Date().toISOString(),
+        // Normalize legacy single-string values to array so schema validation passes
+        staff_lead_status: statuses,
       });
     } catch (err) {
       alert("Failed to save comment: " + (err.message || ""));
@@ -513,7 +518,7 @@ export default function CarrierDatabase() {
                           onChange={(e) => setCommentInputs(prev => ({ ...prev, [carrier.id]: e.target.value }))}
                           onBlur={(e) => {
                             const val = e.target.value;
-                            if (val !== (carrier.staff_comment || "")) saveComment(carrier.id, val);
+                            if (val !== (carrier.staff_comment || "")) saveComment(carrier, val);
                           }}
                           placeholder="Write approach result..."
                           rows={1}
