@@ -28,10 +28,12 @@ export function wrapBodyAsHtml(subject: string, plainBody: string): string {
     <tr>
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-          <!-- Header with logo -->
+          <!-- Header with centered circular logo -->
           <tr>
-            <td style="background-color:#003366;padding:20px 32px;text-align:left;">
-              <img src="${COMPANY_PROFILE.logo_url}" alt="Tycoon Logistics LLC" width="180" style="display:inline-block;border:0;outline:none;text-decoration:none;max-width:180px;height:auto;"/>
+            <td style="background-color:#003366;padding:28px 32px;text-align:center;">
+              <div style="display:inline-block;width:88px;height:88px;border-radius:50%;background-color:#ffffff;padding:6px;box-sizing:border-box;overflow:hidden;">
+                <img src="${COMPANY_PROFILE.logo_url}" alt="Tycoon Logistics LLC" width="76" height="76" style="display:block;border:0;outline:none;text-decoration:none;width:76px;height:76px;border-radius:50%;object-fit:cover;"/>
+              </div>
             </td>
           </tr>
           <!-- Subject line -->
