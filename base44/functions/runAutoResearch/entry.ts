@@ -44,9 +44,17 @@ export default async function(req: Request): Promise<Response> {
     const errors: string[] = [];
 
     // Mark all as Researching up front so concurrent runs don't double-process.
-    await Promise.all(eligible.map((c: any) =>
-      svc.entities.Carrier.update(c.id, { research_status: "Researching", lead_status: "Researching" })
-    ));
+    // Normalize legacy single-string staff_lead_status to array so schema validation passes.
+    await Promise.all(eligible.map((c: any) => {
+      const normalized = Array.isArray(c.staff_lead_status)
+        ? c.staff_lead_status
+        : (c.staff_lead_status ? [c.staff_lead_status] : []);
+      return svc.entities.Carrier.update(c.id, {
+        research_status: "Researching",
+        lead_status: "Researching",
+        staff_lead_status: normalized,
+      });
+    }));
 
     // Process in concurrency-limited batches.
     for (let i = 0; i < eligible.length; i += CONCURRENCY) {
@@ -87,7 +95,13 @@ export default async function(req: Request): Promise<Response> {
               status: "Manual Review",
               timestamp: now,
             });
-            await svc.entities.Carrier.update(carrierId, { research_status: "Failed", lead_status: "Failed" });
+            await svc.entities.Carrier.update(carrierId, {
+              research_status: "Failed",
+              lead_status: "Failed",
+              staff_lead_status: Array.isArray(carrier.staff_lead_status)
+                ? carrier.staff_lead_status
+                : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []),
+            });
           } catch {}
           return false;
         }

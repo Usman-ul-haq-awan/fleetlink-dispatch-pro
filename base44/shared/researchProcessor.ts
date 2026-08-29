@@ -84,6 +84,11 @@ export async function processResearchResult(base44: any, opts: {
   const contacts = data.contacts || {};
   const sr = data.safety_rating || {};
 
+  // Normalize legacy single-string staff_lead_status to array so schema validation passes
+  const normalizedStaffLeadStatus = Array.isArray(carrier.staff_lead_status)
+    ? carrier.staff_lead_status
+    : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []);
+
   const carrierUpdate: any = {
     legal_name: c.legal_name || carrier.legal_name,
     dba_name: c.dba || carrier.dba_name,
@@ -113,6 +118,7 @@ export async function processResearchResult(base44: any, opts: {
     last_researched_at: now,
     research_status: "Browser Complete",
     lead_status: "SAFER Complete",
+    staff_lead_status: normalizedStaffLeadStatus,
   };
 
   await base44.entities.Carrier.update(carrierId, carrierUpdate);

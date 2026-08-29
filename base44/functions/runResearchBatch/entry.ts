@@ -39,7 +39,15 @@ export default async function(req: Request): Promise<Response> {
       const now = new Date().toISOString();
 
       try {
-        await svc.entities.Carrier.update(carrierId, { research_status: "Researching", lead_status: "Researching" });
+        // Normalize legacy single-string staff_lead_status to array so schema validation passes
+        const normalizedStaffLeadStatus = Array.isArray(carrier.staff_lead_status)
+          ? carrier.staff_lead_status
+          : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []);
+        await svc.entities.Carrier.update(carrierId, {
+          research_status: "Researching",
+          lead_status: "Researching",
+          staff_lead_status: normalizedStaffLeadStatus,
+        });
         await svc.entities.ActivityLog.create({
           carrier_id: carrierId,
           action: "Scheduled research started",
@@ -74,7 +82,13 @@ export default async function(req: Request): Promise<Response> {
             status: "Manual Review",
             timestamp: now,
           });
-          await svc.entities.Carrier.update(carrierId, { research_status: "Failed", lead_status: "Failed" });
+          await svc.entities.Carrier.update(carrierId, {
+            research_status: "Failed",
+            lead_status: "Failed",
+            staff_lead_status: Array.isArray(carrier.staff_lead_status)
+              ? carrier.staff_lead_status
+              : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []),
+          });
         } catch {}
       }
     }

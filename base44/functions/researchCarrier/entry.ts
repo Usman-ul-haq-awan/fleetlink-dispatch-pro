@@ -76,8 +76,17 @@ export default async function(req: Request): Promise<Response> {
     const errors: string[] = [];
     const now = new Date().toISOString();
 
+    // Normalize legacy single-string staff_lead_status to array so schema validation passes
+    const normalizedStaffLeadStatus = Array.isArray(carrier.staff_lead_status)
+      ? carrier.staff_lead_status
+      : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []);
+
     // Update research status
-    await base44.entities.Carrier.update(carrierId, { research_status: "Researching", lead_status: "Researching" });
+    await base44.entities.Carrier.update(carrierId, {
+      research_status: "Researching",
+      lead_status: "Researching",
+      staff_lead_status: normalizedStaffLeadStatus,
+    });
     await base44.entities.ActivityLog.create({
       carrier_id: carrierId,
       action: "SAFER lookup started",
