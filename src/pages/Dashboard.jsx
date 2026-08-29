@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
+import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 
 export default function Dashboard() {
@@ -14,6 +15,9 @@ export default function Dashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [followUpCarriers, setFollowUpCarriers] = useState([]);
+  const [loadingFollowUp, setLoadingFollowUp] = useState(false);
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
@@ -22,6 +26,25 @@ export default function Dashboard() {
   useEffect(() => {
     if (currentUser) loadDashboard(currentUser);
   }, [currentUser]);
+
+  const loadFollowUp = async (user) => {
+    setLoadingFollowUp(true);
+    try {
+      const isAdmin = user?.role === "admin";
+      let carriers = (!isAdmin && user)
+        ? await listCarriersForUser(user.id, "-updated_date")
+        : await listAllCarriers("-updated_date");
+      setFollowUpCarriers(carriers.filter(c => c.staff_lead_status === "Follow-up"));
+    } catch (err) {
+      console.error("Follow-up load error:", err);
+    } finally {
+      setLoadingFollowUp(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser && activeTab === "followup") loadFollowUp(currentUser);
+  }, [currentUser, activeTab]);
 
   const loadDashboard = async (user) => {
     try {
@@ -109,6 +132,32 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "overview"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("followup")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "followup"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Follow-up Leads
+        </button>
+      </div>
+
+      {activeTab === "overview" ? (
+      <>
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
         {statCards.map(card => {
@@ -200,6 +249,10 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+      </>
+      ) : (
+        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} />
+      )}
     </div>
   );
 }

@@ -210,6 +210,16 @@
       "type": "string",
       "format": "date-time",
       "description": "When the staff comment was last updated"
+    },
+    "staff_lead_status": {
+      "type": "string",
+      "enum": [
+        "Lead",
+        "Dead Lead",
+        "Follow-up",
+        "Onboard"
+      ],
+      "description": "Staff-assigned lead classification for back-office follow-up"
     }
   },
   "required": [

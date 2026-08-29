@@ -49,6 +49,7 @@ export default function CarrierDatabase() {
   const [carriers, setCarriers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [mcSearch, setMcSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [safetyFilter, setSafetyFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
@@ -149,6 +150,10 @@ export default function CarrierDatabase() {
           (c.mc_number || "").includes(q)
         );
       }
+      if (mcSearch) {
+        const mcq = mcSearch.toLowerCase();
+        filtered = filtered.filter(c => (c.mc_number || "").toLowerCase().includes(mcq));
+      }
       if (statusFilter) filtered = filtered.filter(c => c.lead_status === statusFilter);
       if (safetyFilter) filtered = filtered.filter(c => c.safety_qualification === safetyFilter);
       if (stateFilter) filtered = filtered.filter(c => c.state === stateFilter);
@@ -161,7 +166,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
+  }, [search, mcSearch, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
 
   useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
 
@@ -270,7 +275,7 @@ export default function CarrierDatabase() {
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
             <input
@@ -278,6 +283,16 @@ export default function CarrierDatabase() {
               placeholder="Search name, USDOT, MC..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by MC number..."
+              value={mcSearch}
+              onChange={e => setMcSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

@@ -5,6 +5,7 @@ import {
   ArrowLeft, RefreshCw, ExternalLink, Mail, Phone, ShieldCheck, Truck,
   FileText, ClipboardList, Activity, AlertCircle, CheckCircle, Clock
 } from "lucide-react";
+import StaffLeadBar from "@/components/StaffLeadBar";
 
 const TABS = [
   "Overview", "SAFER", "SMS / CSA", "Registration", "Inspections",
@@ -150,6 +151,9 @@ export default function CarrierDetail() {
           )}
         </div>
       </div>
+
+      {/* Staff Lead Status Bar */}
+      <StaffLeadBar carrier={carrier} existingOnboarding={relatedData.onboarding} onUpdated={loadAll} />
 
       {/* Tabs */}
       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
