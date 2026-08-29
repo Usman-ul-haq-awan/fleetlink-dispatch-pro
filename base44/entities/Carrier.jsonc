@@ -202,6 +202,11 @@
       "type": "string",
       "description": "User ID of the staff member this carrier is allocated to"
     },
+    "assigned_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the carrier was allocated to the staff member"
+    },
     "staff_comment": {
       "type": "string",
       "description": "Staff member's comment on the result of their approach to this carrier"

@@ -70,7 +70,7 @@ export default function StaffList({
       // Assign in one batch — only updates the exact carrier IDs we selected
       await base44.entities.Carrier.updateMany(
         { id: { $in: toAssign.map(c => c.id) }, assigned_to_user_id: null },
-        { $set: { assigned_to_user_id: userId } }
+        { $set: { assigned_to_user_id: userId, assigned_date: new Date().toISOString() } }
       );
       setAllocMessage(key, "success", `${toAssign.length} carriers allocated.`);
       setAllocCount(prev => ({ ...prev, [key]: "" }));
@@ -88,7 +88,7 @@ export default function StaffList({
     try {
       await base44.entities.Carrier.updateMany(
         { assigned_to_user_id: userId },
-        { $unset: { assigned_to_user_id: "" } }
+        { $unset: { assigned_to_user_id: "", assigned_date: "" } }
       );
       setAllocMessage(key, "success", "All carriers unassigned.");
       loadCounts();

@@ -54,6 +54,7 @@ export default async function(req: Request): Promise<Response> {
       "Equipment Type", "Safety Qualification", "Safety Rating",
       "Total Inspections", "OOS Info", "Total Crashes", "Fatal Crashes", "Injury Crashes", "Towaway Crashes",
       "Lead Score", "Lead Status", "Source URLs", "Last Verified",
+      "Staff Lead Status", "Staff Comment", "Allocated On",
     ];
 
     const rows = carriers.map(c => [
@@ -67,6 +68,7 @@ export default async function(req: Request): Promise<Response> {
       c.lead_score ?? "", c.lead_status || "",
       (evidenceByCarrier[c.id] || []).join(" | "),
       c.last_researched_at || "",
+      c.staff_lead_status || "", c.staff_comment || "", c.assigned_date || "",
     ]);
 
     const csv = [headers, ...rows]

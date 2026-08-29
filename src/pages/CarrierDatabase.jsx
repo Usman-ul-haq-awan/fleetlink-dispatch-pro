@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2 } from "lucide-react";
+import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2, Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
@@ -50,6 +50,7 @@ export default function CarrierDatabase() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [mcSearch, setMcSearch] = useState("");
+  const [todayOnly, setTodayOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [safetyFilter, setSafetyFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
@@ -154,6 +155,10 @@ export default function CarrierDatabase() {
         const mcq = mcSearch.toLowerCase();
         filtered = filtered.filter(c => (c.mc_number || "").toLowerCase().includes(mcq));
       }
+      if (todayOnly) {
+        const today = new Date().toISOString().split("T")[0];
+        filtered = filtered.filter(c => c.assigned_date && c.assigned_date.split("T")[0] === today);
+      }
       if (statusFilter) filtered = filtered.filter(c => c.lead_status === statusFilter);
       if (safetyFilter) filtered = filtered.filter(c => c.safety_qualification === safetyFilter);
       if (stateFilter) filtered = filtered.filter(c => c.state === stateFilter);
@@ -166,7 +171,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, mcSearch, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
+  }, [search, mcSearch, todayOnly, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
 
   useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
 
@@ -207,6 +212,9 @@ export default function CarrierDatabase() {
         "Lead Score": c.lead_score ?? "",
         "Lead Status": c.lead_status || "",
         "Last Researched": c.last_researched_at || "",
+        "Staff Lead Status": c.staff_lead_status || "",
+        "Staff Comment": c.staff_comment || "",
+        "Allocated On": c.assigned_date || "",
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));
@@ -246,6 +254,11 @@ export default function CarrierDatabase() {
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Export to Excel
+          </button>
+          <button onClick={() => setTodayOnly(!todayOnly)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${todayOnly ? "bg-violet-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"}`}>
+            <Calendar className="w-4 h-4" />
+            Today's Allocations
           </button>
           <button onClick={handleBulkDelete} disabled={deleting || selectedIds.size === 0}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
@@ -363,6 +376,8 @@ export default function CarrierDatabase() {
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Score</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-slate-600">Scraped On</th>
+                  <th className="text-left px-4 py-3 font-medium text-slate-600">Allocated On</th>
+                  {!isAdmin && <th className="text-left px-4 py-3 font-medium text-slate-600">Lead Mark</th>}
                   {!isAdmin && <th className="text-left px-4 py-3 font-medium text-slate-600">Approach Result / Comment</th>}
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
                 </tr>
@@ -421,6 +436,26 @@ export default function CarrierDatabase() {
                         ? new Date(carrier.last_researched_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
                         : <span className="text-slate-400">—</span>}
                     </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {carrier.assigned_date
+                        ? <span className="text-slate-600">{new Date(carrier.assigned_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
+                        : <span className="text-slate-400">—</span>}
+                    </td>
+                    {!isAdmin && (
+                      <td className="px-4 py-3">
+                        {carrier.staff_lead_status ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                            carrier.staff_lead_status === "Lead" ? "bg-blue-100 text-blue-700" :
+                            carrier.staff_lead_status === "Dead Lead" ? "bg-red-100 text-red-700" :
+                            carrier.staff_lead_status === "Follow-up" ? "bg-amber-100 text-amber-700" :
+                            carrier.staff_lead_status === "Onboard" ? "bg-green-100 text-green-700" :
+                            "bg-slate-100 text-slate-600"
+                          }`}>{carrier.staff_lead_status}</span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Not approached</span>
+                        )}
+                      </td>
+                    )}
                     {!isAdmin && (
                       <td className="px-4 py-3 min-w-[200px]">
                         <textarea
