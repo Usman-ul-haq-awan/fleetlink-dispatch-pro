@@ -82,7 +82,20 @@ export default async function(req: Request): Promise<Response> {
       return new Date(c.email_next_send_at) <= now;
     });
 
-    if (dueNow.length === 0) {
+    // Prioritize carriers a sales agent has already approached (staff_lead_status
+    // includes "Approached") so the engine sends to warm leads first, before
+    // cold/random carriers — within the daily cap.
+    const hasApproached = (c: any) => {
+      const s = Array.isArray(c.staff_lead_status) ? c.staff_lead_status : (c.staff_lead_status ? [c.staff_lead_status] : []);
+      return s.includes("Approached");
+    };
+    const dueNowSorted = [...dueNow].sort((a, b) => {
+      const aA = hasApproached(a) ? 0 : 1;
+      const bA = hasApproached(b) ? 0 : 1;
+      return aA - bA;
+    });
+
+    if (dueNowSorted.length === 0) {
       return Response.json({
         success: true,
         total_carriers: allCarriers.length,
@@ -103,7 +116,7 @@ export default async function(req: Request): Promise<Response> {
     let lastSentHtml = "";
     let lastSentSubject = "";
 
-    for (const carrier of dueNow) {
+    for (const carrier of dueNowSorted) {
       if (sent >= DAILY_CAP) break;
 
       try {
@@ -213,7 +226,7 @@ export default async function(req: Request): Promise<Response> {
       success: true,
       total_carriers: allCarriers.length,
       eligible: eligible.length,
-      due: dueNow.length,
+      due: dueNowSorted.length,
       sent,
       failed,
       assigned_count: assigned.length,
