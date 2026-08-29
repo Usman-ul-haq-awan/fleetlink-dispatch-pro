@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { listAllCarriers } from "@/lib/paginatedList";
-import { Users, Calendar, ChevronDown, ChevronRight, Truck, UserCircle, Filter } from "lucide-react";
+import { Users, Calendar, ChevronDown, ChevronRight, Truck, UserCircle, Mail, Phone } from "lucide-react";
 
 // Status colors mirror the Carrier Database "Mark as" palette so the
 // performance breakdown is instantly recognizable.
@@ -39,14 +39,27 @@ export default function AllocationSection() {
   const load = async () => {
     setLoading(true);
     try {
-      const [carriers, users] = await Promise.all([
+      const [carriers, users, emailLogs, callLogs] = await Promise.all([
         listAllCarriers("-assigned_date"),
         base44.entities.User.list("-created_date", 500).catch(() => []),
+        base44.entities.EmailLog.filter({ status: "Sent" }, "-sent_at", 1000).catch(() => []),
+        base44.entities.CallLog.filter({ status: "Completed" }, "-call_date", 1000).catch(() => []),
       ]);
       const byId = {};
       users.forEach(u => { byId[u.id] = u; });
 
+      // Tally approach activity (sent emails, completed calls) per carrier
+      const emailCounts = {};
+      emailLogs.forEach(e => { if (e.carrier_id) emailCounts[e.carrier_id] = (emailCounts[e.carrier_id] || 0) + 1; });
+      const callCounts = {};
+      callLogs.forEach(c => { if (c.carrier_id) callCounts[c.carrier_id] = (callCounts[c.carrier_id] || 0) + 1; });
+
       const allocated = carriers.filter(c => c.assigned_to_user_id);
+      // Attach per-carrier approach counts for use in the expanded table
+      allocated.forEach(c => {
+        c._email_count = emailCounts[c.id] || 0;
+        c._call_count = callCounts[c.id] || 0;
+      });
 
       const groups = {};
       allocated.forEach(c => {
@@ -65,10 +78,16 @@ export default function AllocationSection() {
 
         // Performance: tally staff_lead_status values across this agent's carriers
         const statusCounts = {};
+        let emailsSent = 0;
+        let callsMade = 0;
+        let carriersApproached = 0;
         g.carriers.forEach(c => {
           getStatuses(c).forEach(s => {
             statusCounts[s] = (statusCounts[s] || 0) + 1;
           });
+          emailsSent += c._email_count;
+          callsMade += c._call_count;
+          if (c._email_count > 0 || c._call_count > 0) carriersApproached++;
         });
         const approached = Object.values(statusCounts).reduce((a, b) => a + b, 0);
 
@@ -81,6 +100,9 @@ export default function AllocationSection() {
           last_allocated: dates.length ? dates[dates.length - 1].toISOString() : null,
           status_counts: statusCounts,
           approached_count: approached,
+          emails_sent: emailsSent,
+          calls_made: callsMade,
+          carriers_approached: carriersApproached,
           carriers: g.carriers.sort((a, b) => new Date(b.assigned_date || 0) - new Date(a.assigned_date || 0)),
         };
       }).sort((a, b) => b.carrier_count - a.carrier_count);
@@ -215,7 +237,14 @@ function AgentRow({ agent, expanded, onToggle, fmtDate }) {
           </span>
         </td>
         <td className="px-4 py-3 cursor-pointer" onClick={onToggle}>
-          <StatusStrip counts={agent.status_counts} />
+          <div className="space-y-1">
+            <StatusStrip counts={agent.status_counts} />
+            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />{agent.emails_sent} sent</span>
+              <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{agent.calls_made} calls</span>
+              <span className="inline-flex items-center gap-1"><UserCircle className="w-3 h-3" />{agent.carriers_approached}/{agent.carrier_count} approached</span>
+            </div>
+          </div>
         </td>
         <td className="px-4 py-3 text-slate-600 whitespace-nowrap cursor-pointer" onClick={onToggle}>{fmtDate(agent.first_allocated)}</td>
         <td className="px-4 py-3 text-slate-600 whitespace-nowrap cursor-pointer" onClick={onToggle}>{fmtDate(agent.last_allocated)}</td>
@@ -233,12 +262,16 @@ function AgentRow({ agent, expanded, onToggle, fmtDate }) {
                     <th className="text-left px-4 py-2 font-medium text-slate-600">MC</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">State</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Allocated On</th>
+                    <th className="text-center px-4 py-2 font-medium text-slate-600">Emails</th>
+                    <th className="text-center px-4 py-2 font-medium text-slate-600">Calls</th>
+                    <th className="text-left px-4 py-2 font-medium text-slate-600">Lead Status</th>
                     <th className="text-left px-4 py-2 font-medium text-slate-600">Mark as</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {agent.carriers.map(c => {
                     const statuses = getStatuses(c);
+                    const approached = c._email_count > 0 || c._call_count > 0;
                     return (
                       <tr key={c.id} className="hover:bg-slate-50">
                         <td className="px-4 py-2">
@@ -250,9 +283,26 @@ function AgentRow({ agent, expanded, onToggle, fmtDate }) {
                         <td className="px-4 py-2 text-slate-600">{c.mc_number || "—"}</td>
                         <td className="px-4 py-2 text-slate-600">{c.state || "—"}</td>
                         <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{fmtDate(c.assigned_date)}</td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`text-xs font-medium ${c._email_count > 0 ? "text-green-700" : "text-slate-400"}`}>
+                            {c._email_count || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`text-xs font-medium ${c._call_count > 0 ? "text-indigo-700" : "text-slate-400"}`}>
+                            {c._call_count || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2">
+                          {approached ? (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approached</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Not approached</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2">
                           {statuses.length === 0 ? (
-                            <span className="text-xs text-slate-400">Not approached</span>
+                            <span className="text-xs text-slate-400">—</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
                               {statuses.map(s => (
