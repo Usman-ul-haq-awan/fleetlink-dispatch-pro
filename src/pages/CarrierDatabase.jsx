@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2, Calendar } from "lucide-react";
+import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2, Calendar, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
@@ -50,7 +50,7 @@ export default function CarrierDatabase() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [mcSearch, setMcSearch] = useState("");
-  const [todayOnly, setTodayOnly] = useState(false);
+  const [allocatedDate, setAllocatedDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [safetyFilter, setSafetyFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
@@ -155,9 +155,8 @@ export default function CarrierDatabase() {
         const mcq = mcSearch.toLowerCase();
         filtered = filtered.filter(c => (c.mc_number || "").toLowerCase().includes(mcq));
       }
-      if (todayOnly) {
-        const today = new Date().toISOString().split("T")[0];
-        filtered = filtered.filter(c => c.assigned_date && c.assigned_date.split("T")[0] === today);
+      if (allocatedDate) {
+        filtered = filtered.filter(c => c.assigned_date && c.assigned_date.split("T")[0] === allocatedDate);
       }
       if (statusFilter) filtered = filtered.filter(c => c.lead_status === statusFilter);
       if (safetyFilter) filtered = filtered.filter(c => c.safety_qualification === safetyFilter);
@@ -171,7 +170,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, mcSearch, todayOnly, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
+  }, [search, mcSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
 
   useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
 
@@ -255,11 +254,33 @@ export default function CarrierDatabase() {
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Export to Excel
           </button>
-          <button onClick={() => setTodayOnly(!todayOnly)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${todayOnly ? "bg-violet-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"}`}>
-            <Calendar className="w-4 h-4" />
-            Today's Allocations
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="date"
+                value={allocatedDate}
+                onChange={e => setAllocatedDate(e.target.value)}
+                className="pl-9 pr-8 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              {allocatedDate && (
+                <button
+                  onClick={() => setAllocatedDate("")}
+                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                  title="Clear date filter"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setAllocatedDate(new Date().toISOString().split("T")[0])}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${allocatedDate === new Date().toISOString().split("T")[0] ? "bg-violet-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"}`}
+            >
+              <Calendar className="w-4 h-4" />
+              Today
+            </button>
+          </div>
           <button onClick={handleBulkDelete} disabled={deleting || selectedIds.size === 0}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
