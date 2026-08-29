@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { Loader2, Target, XCircle, Clock, UserCheck, Voicemail, PhoneOff, CheckCircle, Circle } from "lucide-react";
+import { Loader2, Target, XCircle, Clock, UserCheck, Voicemail, PhoneOff, CheckCircle, Circle, StickyNote } from "lucide-react";
 
 const STATUS_OPTIONS = [
   { value: "Not Approached", label: "Not Approached", icon: Circle, activeClass: "bg-slate-500 text-white border-slate-500", inactiveClass: "text-slate-700 border-slate-300 hover:bg-slate-100" },
@@ -22,7 +22,31 @@ const normalizeStatuses = (value) => {
 
 export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated }) {
   const [setting, setSetting] = useState(null);
+  const [noteInput, setNoteInput] = useState(carrier.staff_comment || "");
+  const [savingNote, setSavingNote] = useState(false);
   const selected = normalizeStatuses(carrier.staff_lead_status);
+
+  const saveNote = async () => {
+    const text = noteInput;
+    if (text === (carrier.staff_comment || "")) return;
+    setSavingNote(true);
+    try {
+      await base44.entities.Carrier.update(carrier.id, {
+        staff_comment: text,
+        staff_comment_date: new Date().toISOString(),
+      });
+      onUpdated();
+    } catch (err) {
+      alert("Failed to save note: " + (err.message || ""));
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  // Keep the textarea in sync when the carrier reloads externally
+  useEffect(() => {
+    setNoteInput(carrier.staff_comment || "");
+  }, [carrier.staff_comment]);
 
   const handleToggle = async (status) => {
     setSetting(status);
@@ -100,6 +124,23 @@ export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated })
             })}
           </div>
         )}
+      </div>
+
+      {/* Notes — synced with carrier database staff_comment */}
+      <div className="mt-3 pt-3 border-t border-slate-100">
+        <label className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+          <StickyNote className="w-3.5 h-3.5" />
+          Approach note (shared with carrier database)
+        </label>
+        <textarea
+          value={noteInput}
+          onChange={(e) => setNoteInput(e.target.value)}
+          onBlur={saveNote}
+          placeholder="Write approach result / note..."
+          rows={2}
+          className="w-full mt-1.5 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+        {savingNote && <p className="text-[10px] text-blue-500 mt-0.5">Saving...</p>}
       </div>
     </div>
   );
