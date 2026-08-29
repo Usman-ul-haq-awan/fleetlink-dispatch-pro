@@ -206,7 +206,9 @@ export default function BrokerVetting() {
                 const bondOk = b.bond_verified && b.bond_active;
                 return (
                   <tr key={b.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{b.broker_name}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      <button onClick={() => setDetail(b)} className="text-left hover:text-blue-600 hover:underline">{b.broker_name}</button>
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{b.mc_number || "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{b.usdot_number || "—"}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${AUTHORITY_COLORS[b.authority_status]||AUTHORITY_COLORS["Not Verified"]}`}>{b.authority_status||"Not Verified"}</span></td>

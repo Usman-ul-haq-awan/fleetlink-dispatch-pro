@@ -362,7 +362,9 @@ function BrokersTable({ brokers, loading, onRescan, rescanning }) {
           <tbody className="divide-y divide-slate-100">
             {brokers.map(b => (
               <tr key={b.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-900">{b.broker_name}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">
+                  <Link to="/brokers" className="text-left hover:text-blue-600 hover:underline">{b.broker_name}</Link>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{b.mc_number || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{b.state || "—"}</td>
                 <td className="px-4 py-3 text-slate-600 text-xs">{b.authority_status || "Not Verified"}</td>
