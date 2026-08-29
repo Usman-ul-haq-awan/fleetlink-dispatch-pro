@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import {
   ArrowLeft, RefreshCw, ExternalLink, Mail, Phone, ShieldCheck, Truck,
-  FileText, ClipboardList, Activity, AlertCircle, CheckCircle, Clock
+  FileText, ClipboardList, Activity, AlertCircle, CheckCircle, Clock, UserCircle
 } from "lucide-react";
 import StaffLeadBar from "@/components/StaffLeadBar";
 
@@ -32,6 +32,12 @@ export default function CarrierDetail() {
     equipment: [], emails: [], calls: [], onboarding: null,
     activity: [], handoffs: [], registration: [], history: [], basics: [],
   });
+  const [assignedAgent, setAssignedAgent] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    base44.auth.me().then(setCurrentUser).catch(() => {});
+  }, []);
 
   useEffect(() => {
     loadAll();
@@ -40,6 +46,11 @@ export default function CarrierDetail() {
   const loadAll = async () => {
     setLoading(true);
     try {
+      let me = currentUser;
+      if (!me) {
+        me = await base44.auth.me().catch(() => null);
+        if (me) setCurrentUser(me);
+      }
       const c = await base44.entities.Carrier.get(id);
       setCarrier(c);
 
@@ -60,6 +71,23 @@ export default function CarrierDetail() {
       ]);
 
       setRelatedData({ evidence, crashes, inspections, insurance, equipment, emails, calls, onboarding: onboarding[0] || null, activity, handoffs, registration, history, basics });
+
+      // Resolve the assigned sales agent's name
+      if (c.assigned_to_user_id) {
+        try {
+          if (me && c.assigned_to_user_id === me.id) {
+            setAssignedAgent({ name: me.full_name || me.email || "You", is_self: true });
+          } else {
+            const users = await base44.entities.User.list("-created_date", 500);
+            const u = users.find(x => x.id === c.assigned_to_user_id);
+            setAssignedAgent({ name: u?.full_name || u?.email || "Unknown Agent", is_self: false });
+          }
+        } catch {
+          setAssignedAgent({ name: null, is_self: false });
+        }
+      } else {
+        setAssignedAgent(null);
+      }
     } catch (err) {
       console.error("Load error:", err);
     } finally {
@@ -107,6 +135,20 @@ export default function CarrierDetail() {
       <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
         <div className="flex items-start justify-between">
           <div>
+            {assignedAgent && (
+              <div className="inline-flex items-center gap-2 mb-2 px-3 py-1 rounded-full bg-violet-50 border border-violet-200">
+                <UserCircle className="w-4 h-4 text-violet-600" />
+                <span className="text-xs font-medium text-violet-700">
+                  Sales Agent: <strong>{assignedAgent.name}</strong>
+                  {assignedAgent.is_self && <span className="text-violet-500"> (you)</span>}
+                </span>
+                {carrier.assigned_date && (
+                  <span className="text-xs text-violet-400">
+                    • Allocated {new Date(carrier.assigned_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                )}
+              </div>
+            )}
             <h1 className="text-xl font-bold text-slate-900">{carrier.legal_name || "Unknown Carrier"}</h1>
             {carrier.dba_name && <p className="text-sm text-slate-500">DBA: {carrier.dba_name}</p>}
             <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">

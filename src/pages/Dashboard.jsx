@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock, ShieldCheck, RefreshCw, Loader2 } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
+import AllocationSection from "@/components/AllocationSection";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 
@@ -204,6 +205,18 @@ export default function Dashboard() {
         >
           Vetted Brokers
         </button>
+        {currentUser?.role === "admin" && (
+          <button
+            onClick={() => setActiveTab("allocations")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "allocations"
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Allocations
+          </button>
+        )}
       </div>
 
       {activeTab === "overview" ? (
@@ -302,6 +315,8 @@ export default function Dashboard() {
       </>
       ) : activeTab === "followup" ? (
         <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} />
+      ) : activeTab === "allocations" ? (
+        <AllocationSection />
       ) : (
         <BrokersTable brokers={brokers} loading={loadingBrokers} onRescan={rescanBroker} rescanning={rescanningBroker} />
       )}
