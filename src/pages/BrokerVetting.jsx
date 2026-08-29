@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { Search, Plus, Eye, Pencil, Trash2, Loader2, Briefcase, X, ShieldCheck } from "lucide-react";
+import { Search, Plus, Eye, Pencil, Trash2, Loader2, Briefcase, X, ShieldCheck, RefreshCw, Radar } from "lucide-react";
 import BrokerForm from "@/components/brokers/BrokerForm";
 import BrokerScoreCard from "@/components/brokers/BrokerScoreCard";
-import { RATING_COLORS, RATING_DOT } from "@/lib/brokerScoring";
+import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 
 const AUTHORITY_COLORS = {
   "Active": "bg-green-100 text-green-700",
@@ -30,6 +30,9 @@ export default function BrokerVetting() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [rescanning, setRescanning] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +92,39 @@ export default function BrokerVetting() {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const res = await base44.functions.invoke("syncBrokersFromCarriers", {});
+      const d = res.data || res;
+      setSyncMsg(`Scanned ${d.total_carriers_scanned} carriers — found ${d.broker_carriers_found} brokers, created ${d.brokers_created} new, skipped ${d.brokers_skipped_existing} existing. Total brokers now: ${d.total_brokers_now}.`);
+      load();
+    } catch (err) {
+      setSyncMsg("Sync failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleRescan = async (b) => {
+    setRescanning(b.id);
+    try {
+      const { score, rating } = scoreBroker(b);
+      await base44.entities.Broker.update(b.id, {
+        vetting_score: score,
+        vetting_rating: rating,
+        vetting_date: new Date().toISOString(),
+      });
+      load();
+      if (detail?.id === b.id) setDetail({ ...b, vetting_score: score, vetting_rating: rating });
+    } catch (err) {
+      alert("Re-scan failed: " + (err.message || ""));
+    } finally {
+      setRescanning(null);
+    }
+  };
+
   const setStatus = async (b, status) => {
     try {
       await base44.entities.Broker.update(b.id, { vetting_status: status });
@@ -108,10 +144,21 @@ export default function BrokerVetting() {
           </h1>
           <p className="text-slate-500 text-sm mt-1">{brokers.length} brokers — verify authority, bond, payment reputation & load legitimacy</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-          <Plus className="w-4 h-4" /> Add Broker
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleSync} disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+            Sync from Carriers
+          </button>
+          <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+            <Plus className="w-4 h-4" /> Add Broker
+          </button>
+        </div>
       </div>
+
+      {syncMsg && (
+        <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 mb-4 text-sm text-violet-800">{syncMsg}</div>
+      )}
 
       {/* Filters */}
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
@@ -180,6 +227,9 @@ export default function BrokerVetting() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setDetail(b)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => handleRescan(b)} disabled={rescanning === b.id} className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded disabled:opacity-50" title="Re-scan score">
+                          {rescanning === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        </button>
                         <button onClick={() => openEdit(b)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="Edit"><Pencil className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(b)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>

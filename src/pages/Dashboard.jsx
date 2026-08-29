@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock, ShieldCheck, RefreshCw, Loader2 } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
+import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -18,6 +19,9 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [followUpCarriers, setFollowUpCarriers] = useState([]);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
+  const [brokers, setBrokers] = useState([]);
+  const [loadingBrokers, setLoadingBrokers] = useState(false);
+  const [rescanningBroker, setRescanningBroker] = useState(null);
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
@@ -48,6 +52,39 @@ export default function Dashboard() {
   useEffect(() => {
     if (currentUser && activeTab === "followup") loadFollowUp(currentUser);
   }, [currentUser, activeTab]);
+
+  const loadBrokers = async () => {
+    setLoadingBrokers(true);
+    try {
+      const all = await base44.entities.Broker.list("-vetting_date", 500);
+      setBrokers(all);
+    } catch (err) {
+      console.error("Broker load error:", err);
+    } finally {
+      setLoadingBrokers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "brokers") loadBrokers();
+  }, [activeTab]);
+
+  const rescanBroker = async (b) => {
+    setRescanningBroker(b.id);
+    try {
+      const { score, rating } = scoreBroker(b);
+      await base44.entities.Broker.update(b.id, {
+        vetting_score: score,
+        vetting_rating: rating,
+        vetting_date: new Date().toISOString(),
+      });
+      setBrokers(prev => prev.map(x => x.id === b.id ? { ...x, vetting_score: score, vetting_rating: rating } : x));
+    } catch (err) {
+      alert("Re-scan failed: " + (err.message || ""));
+    } finally {
+      setRescanningBroker(null);
+    }
+  };
 
   const loadDashboard = async (user) => {
     try {
@@ -157,6 +194,16 @@ export default function Dashboard() {
         >
           Follow-up Leads
         </button>
+        <button
+          onClick={() => setActiveTab("brokers")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "brokers"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Vetted Brokers
+        </button>
       </div>
 
       {activeTab === "overview" ? (
@@ -253,9 +300,92 @@ export default function Dashboard() {
         </div>
       </div>
       </>
-      ) : (
+      ) : activeTab === "followup" ? (
         <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} />
+      ) : (
+        <BrokersTable brokers={brokers} loading={loadingBrokers} onRescan={rescanBroker} rescanning={rescanningBroker} />
       )}
+    </div>
+  );
+}
+
+function BrokersTable({ brokers, loading, onRescan, rescanning }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+  if (brokers.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <ShieldCheck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <p className="text-slate-500">No brokers yet. Sync brokers from the Broker Vetting page.</p>
+        <Link to="/brokers" className="inline-block mt-3 text-blue-600 text-sm font-medium hover:underline">Go to Broker Vetting →</Link>
+      </div>
+    );
+  }
+  const approved = brokers.filter(b => b.vetting_rating === "Approved").length;
+  const caution = brokers.filter(b => b.vetting_rating === "Approved with Caution").length;
+  const highRisk = brokers.filter(b => b.vetting_rating === "High Risk").length;
+  const doNotUse = brokers.filter(b => b.vetting_rating === "Do Not Use").length;
+  return (
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="rounded-lg border p-4 bg-green-50 text-green-700 border-green-200">
+          <div className="flex items-center justify-between mb-1"><ShieldCheck className="w-5 h-5 opacity-70" /><span className="text-2xl font-bold">{approved}</span></div>
+          <p className="text-xs font-medium opacity-80">Approved</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-yellow-50 text-yellow-700 border-yellow-200">
+          <div className="flex items-center justify-between mb-1"><ShieldCheck className="w-5 h-5 opacity-70" /><span className="text-2xl font-bold">{caution}</span></div>
+          <p className="text-xs font-medium opacity-80">Approved with Caution</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-orange-50 text-orange-700 border-orange-200">
+          <div className="flex items-center justify-between mb-1"><AlertCircle className="w-5 h-5 opacity-70" /><span className="text-2xl font-bold">{highRisk}</span></div>
+          <p className="text-xs font-medium opacity-80">High Risk</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-red-50 text-red-700 border-red-200">
+          <div className="flex items-center justify-between mb-1"><AlertCircle className="w-5 h-5 opacity-70" /><span className="text-2xl font-bold">{doNotUse}</span></div>
+          <p className="text-xs font-medium opacity-80">Do Not Use</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 overflow-auto">
+        <table className="min-w-full w-max text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+            <tr>
+              {["Broker","MC","State","Authority","Score","Rating","Status","Last Vetted",""].map(h => (
+                <th key={h} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {brokers.map(b => (
+              <tr key={b.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 font-medium text-slate-900">{b.broker_name}</td>
+                <td className="px-4 py-3 text-slate-600">{b.mc_number || "—"}</td>
+                <td className="px-4 py-3 text-slate-600">{b.state || "—"}</td>
+                <td className="px-4 py-3 text-slate-600 text-xs">{b.authority_status || "Not Verified"}</td>
+                <td className="px-4 py-3 text-center font-semibold text-slate-700">{b.vetting_score ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${RATING_COLORS[b.vetting_rating]||RATING_COLORS["Not Scored"]}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${RATING_DOT[b.vetting_rating]||RATING_DOT["Not Scored"]}`} />{b.vetting_rating||"Not Scored"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600 text-xs">{b.vetting_status || "Pending"}</td>
+                <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{b.vetting_date ? new Date(b.vetting_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
+                <td className="px-4 py-3">
+                  <button onClick={() => onRescan(b)} disabled={rescanning === b.id}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg disabled:opacity-50">
+                    {rescanning === b.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Re-scan
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
