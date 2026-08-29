@@ -65,6 +65,53 @@
     "checklist_notes": {
       "type": "string"
     },
+    "uses_factoring": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, Notice of Assignment is required instead of Void Check"
+    },
+    "mc_authority_url": {
+      "type": "string",
+      "description": "MC Authority Certificate file URL"
+    },
+    "mc_authority_name": {
+      "type": "string"
+    },
+    "coi_url": {
+      "type": "string",
+      "description": "Certificate of Insurance file URL"
+    },
+    "coi_name": {
+      "type": "string"
+    },
+    "w9_url": {
+      "type": "string",
+      "description": "W-9 Form file URL"
+    },
+    "w9_name": {
+      "type": "string"
+    },
+    "void_check_url": {
+      "type": "string",
+      "description": "Void Check file URL (for direct-pay setup)"
+    },
+    "void_check_name": {
+      "type": "string"
+    },
+    "notice_of_assignment_url": {
+      "type": "string",
+      "description": "Notice of Assignment file URL (if using factoring)"
+    },
+    "notice_of_assignment_name": {
+      "type": "string"
+    },
+    "setup_packet_url": {
+      "type": "string",
+      "description": "Signed Setup Packet / Service Agreement file URL"
+    },
+    "setup_packet_name": {
+      "type": "string"
+    },
     "created_at": {
       "type": "string",
       "format": "date-time"
