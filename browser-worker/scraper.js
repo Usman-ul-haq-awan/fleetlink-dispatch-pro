@@ -555,4 +555,139 @@ async function runResearch({ usdot, mc, steps }) {
   return result;
 }
 
-module.exports = { runResearch, buildSnapshotUrl };
+// Broker-specific research: opens the SAFER snapshot, follows the
+// Licensing & Insurance link (now pointing to the MOTUS SPA), waits for
+// the React app to render, and extracts bond + authority-grant data that a
+// plain HTTP fetch cannot reach. Returns structured bond info.
+async function runBrokerResearch({ usdot, mc }) {
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: require('path').join(__dirname, 'node_modules/playwright-core/.local-browsers/chromium-1124/chrome-linux/chrome'),
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+  });
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    viewport: { width: 1280, height: 900 },
+    locale: 'en-US',
+  });
+  const page = await context.newPage();
+
+  const result = {
+    requested: { usdot: usdot || null, mc: mc || null },
+    safer: { status: 'pending' },
+    insurance: { status: 'pending' },
+    bond_type: 'Not Verified',
+    bond_amount: null,
+    bond_active: false,
+    grant_date: null,
+    authority_status: '',
+    entity_type: '',
+    legal_name: '',
+    errors: [],
+  };
+
+  try {
+    // STEP 1 — SAFER snapshot (plain navigation, renders server-side HTML)
+    const snapshotUrl = buildSnapshotUrl({ usdot, mc });
+    const g1 = await safeGoto(page, snapshotUrl, 30000);
+    if (!g1.ok) {
+      result.errors.push({ step: 'SAFER', message: g1.error || 'navigation failed' });
+      result.safer = { status: 'error', error: g1.error };
+      await browser.close();
+      return result;
+    }
+    await page.waitForSelector('table', { timeout: 6000 }).catch(() => {});
+    const saferPairs = await extractLabelValuePairs(page);
+    const saferLinks = await extractLinks(page);
+
+    result.legal_name = getField(saferPairs, ['Legal Name', 'Name']);
+    result.authority_status = getField(saferPairs, ['Operating Authority Status', 'Operating Status']);
+    result.entity_type = getField(saferPairs, ['Entity Type', 'Carrier Type']);
+    result.safer = { status: 'ok', source_url: page.url(), retrieval_date: nowIso() };
+
+    // STEP 2 — Find the Licensing & Insurance link (now points to motus.dot.gov)
+    const insuranceLink = findLinkByText(saferLinks, ['Licensing & Insurance', 'Licensing and Insurance', 'Insurance']);
+    if (!insuranceLink) {
+      result.insurance = { status: 'not_found' };
+      result.errors.push({ step: 'Insurance', message: 'No Licensing & Insurance link found on SAFER page' });
+      await browser.close();
+      return result;
+    }
+
+    // STEP 3 — Render the MOTUS SPA. It's a React app that loads data via XHR
+    // after initial load, so we wait for the content to appear rather than just
+    // domcontentloaded. We wait for bond-related text or a timeout.
+    const g2 = await safeGoto(page, insuranceLink.href, 30000);
+    if (!g2.ok) {
+      result.insurance = { status: 'error', error: g2.error };
+      result.errors.push({ step: 'Insurance', message: g2.error || 'navigation failed' });
+      await browser.close();
+      return result;
+    }
+
+    // Wait for the SPA to render bond/authority content. MOTUS shows filing
+    // tables with "BMC-84"/"BMC-85"/"Grant Date"/"$75,000" once loaded.
+    let rendered = false;
+    try {
+      await page.waitForFunction(() => {
+        const t = document.body ? document.body.innerText : '';
+        return /BMC-?8[45]/i.test(t) || /grant\s+date/i.test(t) || /\$?\s*75,?000/i.test(t) || /process\s+agent/i.test(t);
+      }, { timeout: 20000 });
+      rendered = true;
+    } catch {
+      // Fallback: wait a fixed time for any content to render
+      await page.waitForTimeout(5000);
+      rendered = true;
+    }
+
+    const bodyText = await extractText(page);
+    const pageUrl = page.url();
+
+    // Parse bond type
+    if (/BMC-?84/i.test(bodyText)) result.bond_type = 'BMC-84';
+    else if (/BMC-?85/i.test(bodyText)) result.bond_type = 'BMC-85';
+
+    // Parse bond active (cancellation date blank/none = active)
+    const cancelMatch = bodyText.match(/cancellation\s+date\s*:?\s*([^\n|]{0,40})/i);
+    if (cancelMatch) {
+      const cancelVal = cancelMatch[1].trim();
+      result.bond_active = !cancelVal || /none|^[-]*$|^n\/a$/i.test(cancelVal);
+    } else {
+      result.bond_active = /effective\s+date/i.test(bodyText) && !/cancelled/i.test(bodyText);
+    }
+
+    // Parse bond amount
+    const amountMatch = bodyText.match(/(?:bond|trust|coverage|amount)[^$\d]{0,30}\$?\s*([\d,]{5,})/i);
+    if (amountMatch) {
+      const n = parseInt(amountMatch[1].replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(n)) result.bond_amount = n;
+    }
+    if (result.bond_amount === null) {
+      const stdMatch = bodyText.match(/\$\s*75,?000/);
+      if (stdMatch) result.bond_amount = 75000;
+    }
+
+    // Parse authority grant date
+    const grantMatch = bodyText.match(/(?:grant\s+date|authority\s+granted|granted\s+on)\s*:?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/i);
+    if (grantMatch) {
+      const parsed = new Date(grantMatch[1]);
+      if (!isNaN(parsed.getTime())) result.grant_date = parsed.toISOString();
+    }
+
+    result.insurance = {
+      status: 'ok',
+      source_url: pageUrl,
+      retrieval_date: nowIso(),
+      rendered,
+      text_length: bodyText.length,
+    };
+  } catch (err) {
+    result.errors.push({ step: 'Browser', message: err.message });
+  } finally {
+    await browser.close();
+  }
+
+  return result;
+}
+
+module.exports = { runResearch, runBrokerResearch, buildSnapshotUrl };

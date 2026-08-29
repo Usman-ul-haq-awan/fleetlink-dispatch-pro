@@ -4,6 +4,7 @@
 // then re-calculates the vetting score.
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
+import { secrets } from "base44:runtime";
 import { parseSaferSnapshot, stripHtml, extractLinks } from "../../shared/saferParser.ts";
 import { scoreBroker } from "../../shared/brokerScoring.ts";
 
@@ -178,27 +179,68 @@ export default async function(req: Request): Promise<Response> {
       vetting_date: now,
     };
 
-    // STEP 2: Fetch Licensing & Insurance page for bond info
-    if (saferData.insuranceLink) {
-      const insUrl = saferData.insuranceLink.startsWith("http")
-        ? saferData.insuranceLink
-        : `https://safer.fmcsa.dot.gov/${saferData.insuranceLink}`;
-      const insResult = await fetchPage(insUrl);
-
-      if (insResult.ok && insResult.html.length > 500) {
-        const bond = parseBondInfo(insResult.html);
-        update.bond_type = bond.bondType;
-        update.bond_verified = bond.bondType !== "Not Verified";
-        update.bond_active = bond.bondActive;
-        if (bond.bondAmount !== null) update.bond_amount = bond.bondAmount;
-        // Derive years_active from the authority grant date (only if not manually set or empty)
-        if (bond.grantDate && (!broker.years_active || broker.years_active === 0)) {
-          const years = Math.floor((Date.now() - new Date(bond.grantDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-          if (years >= 0) update.years_active = years;
+    // STEP 2: Fetch Licensing & Insurance page for bond info.
+    // FMCSA migrated L&I to the MOTUS SPA (motus.dot.gov), which is a React app
+    // that a plain HTTP fetch cannot render. Route through the Playwright
+    // browser worker so the page is rendered in real Chromium before parsing.
+    const workerUrl = secrets.get("WORKER_URL");
+    const workerKey = secrets.get("WORKER_API_KEY");
+    if (workerUrl) {
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (workerKey) headers["x-worker-api-key"] = workerKey;
+        const workerRes = await fetch(`${workerUrl.replace(/\/$/, "")}/broker-research`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            usdot: usdot || broker.usdot_number || undefined,
+            mc: mc || broker.mc_number || undefined,
+          }),
+        });
+        if (workerRes.ok) {
+          const bond = await workerRes.json();
+          update.bond_type = bond.bond_type || "Not Verified";
+          update.bond_verified = bond.bond_type && bond.bond_type !== "Not Verified";
+          update.bond_active = !!bond.bond_active;
+          if (bond.bond_amount !== null && bond.bond_amount !== undefined) update.bond_amount = bond.bond_amount;
+          // Derive years_active from the authority grant date (only if not manually set or empty)
+          if (bond.grant_date && (!broker.years_active || broker.years_active === 0)) {
+            const years = Math.floor((Date.now() - new Date(bond.grant_date).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+            if (years >= 0) update.years_active = years;
+          }
+          // Use browser-rendered authority status/entity type if SAFER didn't yield them
+          if (!authorityVerified && bond.authority_status) {
+            const as = bond.authority_status.toUpperCase();
+            if (as.includes("AUTHORIZED") || as === "ACTIVE") update.authority_status = "Active";
+          }
+          stepsCompleted.push("insurance");
+        } else {
+          errors.push(`Broker worker returned ${workerRes.status}`);
         }
-        stepsCompleted.push("insurance");
-      } else {
-        errors.push(`Insurance page fetch failed (status ${insResult.status})`);
+      } catch (err: any) {
+        errors.push(`Broker worker call failed: ${err.message}`);
+      }
+    } else {
+      // Fallback: plain HTTP fetch (works only if FMCSA reverts to server-rendered L&I)
+      if (saferData.insuranceLink) {
+        const insUrl = saferData.insuranceLink.startsWith("http")
+          ? saferData.insuranceLink
+          : `https://safer.fmcsa.dot.gov/${saferData.insuranceLink}`;
+        const insResult = await fetchPage(insUrl);
+        if (insResult.ok && insResult.html.length > 500) {
+          const bond = parseBondInfo(insResult.html);
+          update.bond_type = bond.bondType;
+          update.bond_verified = bond.bondType !== "Not Verified";
+          update.bond_active = bond.bondActive;
+          if (bond.bondAmount !== null) update.bond_amount = bond.bondAmount;
+          if (bond.grantDate && (!broker.years_active || broker.years_active === 0)) {
+            const years = Math.floor((Date.now() - new Date(bond.grantDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+            if (years >= 0) update.years_active = years;
+          }
+          stepsCompleted.push("insurance");
+        } else {
+          errors.push(`Insurance page fetch failed (status ${insResult.status}) — worker not configured`);
+        }
       }
     }
 

@@ -48,6 +48,27 @@ app.post('/research', authMiddleware, async (req, res) => {
   }
 });
 
+app.post('/broker-research', authMiddleware, async (req, res) => {
+  const { usdot, mc } = req.body || {};
+  if (!usdot && !mc) {
+    return res.status(400).json({ error: 'Either "usdot" or "mc" is required in the request body.' });
+  }
+  const start = Date.now();
+  try {
+    const { runBrokerResearch } = require('./scraper');
+    const result = await runBrokerResearch({
+      usdot: usdot ? String(usdot) : null,
+      mc: mc ? String(mc) : null,
+    });
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    console.log(`Broker research: USDOT=${usdot || 'n/a'} MC=${mc || 'n/a'} (${elapsed}s) bond=${result.bond_type}`);
+    res.json(result);
+  } catch (err) {
+    console.error('Broker research error:', err.message);
+    res.status(500).json({ error: err.message, errors: [{ step: 'Worker', message: err.message }] });
+  }
+});
+
 app.post('/send-email', authMiddleware, async (req, res) => {
   const { smtp, from_email, from_name, to, subject, body } = req.body || {};
   if (!smtp || !smtp.host || !to || !subject) {
