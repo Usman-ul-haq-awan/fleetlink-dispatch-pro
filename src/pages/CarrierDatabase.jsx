@@ -10,6 +10,11 @@ import { subscribe as subscribeResearch, startResearch as startRunnerResearch, s
 // operating_status fields. FMCSA uses "A" = Interstate, "B" = Intrastate,
 // "C" = Both; SMS may store a descriptive string.
 function getOperationType(carrier) {
+  // Broker authority takes precedence — a broker may also hold carrier authority,
+  // but staff filter by the broker designation to find freight-arrangement leads.
+  const entityType = String(carrier.entity_type || "").toUpperCase();
+  const carrierType = String(carrier.carrier_type || "").toUpperCase();
+  if (entityType.includes("BROKER") || carrierType.includes("BROKER")) return "Broker";
   const seg = String(carrier.carrier_segment || "").toUpperCase();
   const op = String(carrier.operating_status || "").toUpperCase();
   const text = `${seg} ${op}`;
@@ -372,6 +377,7 @@ export default function CarrierDatabase() {
           <select value={operationFilter} onChange={e => setOperationFilter(e.target.value)}
             className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">All Operations</option>
+            <option value="Broker">Broker</option>
             <option value="Interstate">Interstate</option>
             <option value="Intrastate">Intrastate</option>
             <option value="Both">Both</option>
@@ -448,7 +454,8 @@ export default function CarrierDatabase() {
                     <td className="px-4 py-3">
                       {(() => {
                         const op = getOperationType(carrier);
-                        const cls = op === "Interstate" ? "bg-blue-100 text-blue-700" :
+                        const cls = op === "Broker" ? "bg-violet-100 text-violet-700" :
+                          op === "Interstate" ? "bg-blue-100 text-blue-700" :
                           op === "Intrastate" ? "bg-amber-100 text-amber-700" :
                           op === "Both" ? "bg-purple-100 text-purple-700" :
                           "bg-slate-100 text-slate-500";
