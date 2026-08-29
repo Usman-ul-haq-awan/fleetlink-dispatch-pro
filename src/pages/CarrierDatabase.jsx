@@ -61,6 +61,8 @@ export default function CarrierDatabase() {
   const [safetyFilter, setSafetyFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [agentFilterName, setAgentFilterName] = useState("");
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [researching, setResearching] = useState(false);
@@ -145,6 +147,23 @@ export default function CarrierDatabase() {
     if (safety) setSafetyFilter(safety);
   }, [searchParams]);
 
+  // Apply an agent allocation filter passed via the URL (e.g. ?agent=<user_id>).
+  useEffect(() => {
+    const agent = searchParams.get("agent");
+    if (agent) {
+      setAgentFilter(agent);
+      base44.entities.User.list("-created_date", 500)
+        .then(users => {
+          const u = users.find(x => x.id === agent);
+          setAgentFilterName(u?.full_name || u?.email || "this agent");
+        })
+        .catch(() => setAgentFilterName("this agent"));
+    } else {
+      setAgentFilter("");
+      setAgentFilterName("");
+    }
+  }, [searchParams]);
+
   const loadCarriers = useCallback(async (reset = false) => {
     setLoading(true);
     try {
@@ -177,6 +196,7 @@ export default function CarrierDatabase() {
       if (safetyFilter) filtered = filtered.filter(c => c.safety_qualification === safetyFilter);
       if (stateFilter) filtered = filtered.filter(c => c.state === stateFilter);
       if (operationFilter) filtered = filtered.filter(c => getOperationType(c) === operationFilter);
+      if (agentFilter) filtered = filtered.filter(c => c.assigned_to_user_id === agentFilter);
 
       setCarriers(filtered);
       setHasMore(filtered.length === PAGE_SIZE);
@@ -185,7 +205,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, mcSearch, phoneSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, currentUser, isAdmin]);
+  }, [search, mcSearch, phoneSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, agentFilter, currentUser, isAdmin]);
 
   useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
 
@@ -319,6 +339,17 @@ export default function CarrierDatabase() {
             <div className="bg-violet-600 h-2 rounded-full transition-all" style={{ width: `${researchCenter.progress.total ? (researchCenter.progress.done + researchCenter.progress.failed) / researchCenter.progress.total * 100 : 0}%` }} />
           </div>
           <p className="text-xs text-violet-700 mt-2">Running in the background — you can navigate to other pages and this will keep going.</p>
+        </div>
+      )}
+
+      {agentFilter && (
+        <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 mb-4 flex items-center justify-between">
+          <span className="text-sm text-violet-800">
+            Filtered by sales agent: <strong>{agentFilterName}</strong>
+          </span>
+          <Link to="/carriers" className="text-xs text-violet-600 hover:text-violet-800 font-medium hover:underline">
+            Clear filter
+          </Link>
         </div>
       )}
 
