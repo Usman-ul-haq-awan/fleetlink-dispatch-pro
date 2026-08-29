@@ -139,8 +139,8 @@ export default function CarrierDatabase() {
     try {
       // Staff (non-admin) only fetch carriers allocated to them (server-side filter)
       let filtered = (currentUser && !isAdmin)
-        ? await listCarriersForUser(currentUser.id, "-updated_date")
-        : await listAllCarriers("-updated_date");
+        ? await listCarriersForUser(currentUser.id, "-assigned_date")
+        : await listAllCarriers("-assigned_date");
 
       if (search) {
         const q = search.toLowerCase();
