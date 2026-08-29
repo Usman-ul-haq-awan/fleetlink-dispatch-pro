@@ -17,6 +17,7 @@ import Outreach from '@/pages/Outreach';
 import CallingQueue from '@/pages/CallingQueue';
 import HumanHandoff from '@/pages/HumanHandoff';
 import OnboardingPage from '@/pages/OnboardingPage';
+import BrokerVetting from '@/pages/BrokerVetting';
 import ImportExport from '@/pages/ImportExport';
 import ActivityLog from '@/pages/ActivityLog';
 import Settings from '@/pages/Settings';
@@ -63,6 +64,7 @@ const AuthenticatedApp = () => {
         <Route path="/calling" element={<CallingQueue />} />
         <Route path="/handoffs" element={<HumanHandoff />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/brokers" element={<BrokerVetting />} />
         <Route path="/import-export" element={<ImportExport />} />
         <Route path="/activity" element={<ActivityLog />} />
         <Route path="/settings" element={<Settings />} />

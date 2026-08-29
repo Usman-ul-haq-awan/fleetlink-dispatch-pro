@@ -2,7 +2,7 @@ import React from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import {
-  LayoutDashboard, Database, Search, ShieldCheck, Mail, Phone,
+  LayoutDashboard, Database, Search, ShieldCheck, ShieldAlert, Mail, Phone,
   UserCheck, ClipboardCheck, Download, Activity, Settings, LogOut,
   Truck, Send, Menu, X
 } from "lucide-react";
@@ -18,6 +18,7 @@ const navItems = [
   { label: "Calling Queue", path: "/calling", icon: Phone },
   { label: "Human Handoff", path: "/handoffs", icon: UserCheck },
   { label: "Onboarding", path: "/onboarding", icon: ClipboardCheck },
+  { label: "Broker Vetting", path: "/brokers", icon: ShieldAlert },
   { label: "Import / Export", path: "/import-export", icon: Download },
   { label: "Activity Log", path: "/activity", icon: Activity },
   { label: "Settings", path: "/settings", icon: Settings },

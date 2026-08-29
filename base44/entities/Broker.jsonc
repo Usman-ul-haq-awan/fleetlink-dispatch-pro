@@ -1,0 +1,213 @@
+{
+  "name": "Broker",
+  "type": "object",
+  "properties": {
+    "broker_name": {
+      "type": "string",
+      "description": "Legal company name of the broker"
+    },
+    "dba_name": {
+      "type": "string"
+    },
+    "mc_number": {
+      "type": "string",
+      "description": "MC number (broker authority)"
+    },
+    "usdot_number": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "website": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    },
+    "zip": {
+      "type": "string"
+    },
+    "contact_person": {
+      "type": "string"
+    },
+    "contact_title": {
+      "type": "string"
+    },
+    "authority_status": {
+      "type": "string",
+      "enum": [
+        "Active",
+        "Inactive",
+        "Suspended",
+        "Revoked",
+        "Not Verified"
+      ],
+      "default": "Not Verified"
+    },
+    "authority_type": {
+      "type": "string",
+      "description": "e.g. Broker, Carrier-Broker"
+    },
+    "authority_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "Confirmed active via FMCSA Licensing & Insurance"
+    },
+    "name_matches_authority": {
+      "type": "boolean",
+      "default": false,
+      "description": "Name on authority matches the company you are dealing with"
+    },
+    "bond_type": {
+      "type": "string",
+      "enum": [
+        "BMC-84",
+        "BMC-85",
+        "None",
+        "Not Verified"
+      ]
+    },
+    "bond_amount": {
+      "type": "number",
+      "description": "Bond/trust amount in USD (requirement is $75,000)"
+    },
+    "bond_verified": {
+      "type": "boolean",
+      "default": false
+    },
+    "bond_active": {
+      "type": "boolean",
+      "default": false
+    },
+    "years_active": {
+      "type": "number",
+      "description": "Years the broker has been in business"
+    },
+    "payment_days_avg": {
+      "type": "number",
+      "description": "Average days to pay carriers"
+    },
+    "non_payment_reports": {
+      "type": "number",
+      "default": 0
+    },
+    "slow_payment_complaints": {
+      "type": "number",
+      "default": 0
+    },
+    "double_brokering_complaints": {
+      "type": "number",
+      "default": 0
+    },
+    "fraud_complaints": {
+      "type": "number",
+      "default": 0
+    },
+    "cargo_disputes": {
+      "type": "number",
+      "default": 0
+    },
+    "carrier_reviews": {
+      "type": "string",
+      "description": "Summary of carrier reviews / reputation sources"
+    },
+    "currently_working_with_carriers": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether carriers are currently working with this broker"
+    },
+    "payment_reputation_notes": {
+      "type": "string"
+    },
+    "load_pickup": {
+      "type": "string"
+    },
+    "load_delivery": {
+      "type": "string"
+    },
+    "load_commodity": {
+      "type": "string"
+    },
+    "load_weight": {
+      "type": "string"
+    },
+    "load_rate": {
+      "type": "number",
+      "description": "Offered rate in USD"
+    },
+    "load_mileage": {
+      "type": "number"
+    },
+    "load_rate_warning": {
+      "type": "boolean",
+      "default": false,
+      "description": "Rate dramatically above normal market rate (fraud warning sign)"
+    },
+    "rate_confirmation_received": {
+      "type": "boolean",
+      "default": false
+    },
+    "who_pays_carrier": {
+      "type": "string",
+      "description": "Who actually pays the carrier"
+    },
+    "detention_policy": {
+      "type": "string"
+    },
+    "tonu_policy": {
+      "type": "string"
+    },
+    "layover_policy": {
+      "type": "string"
+    },
+    "lumper": {
+      "type": "string"
+    },
+    "vetting_score": {
+      "type": "number",
+      "default": 0,
+      "description": "Auto-calculated 100-point vetting score"
+    },
+    "vetting_rating": {
+      "type": "string",
+      "enum": [
+        "Approved",
+        "Approved with Caution",
+        "High Risk",
+        "Do Not Use",
+        "Not Scored"
+      ],
+      "default": "Not Scored"
+    },
+    "vetting_status": {
+      "type": "string",
+      "enum": [
+        "Pending",
+        "Approved",
+        "Rejected",
+        "Review"
+      ],
+      "default": "Pending"
+    },
+    "vetting_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "broker_name"
+  ]
+}
