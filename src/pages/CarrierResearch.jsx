@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Play, RefreshCw, AlertCircle, CheckCircle, Clock, Loader2, Truck, Download, Trash2, ShieldCheck, Server } from "lucide-react";
 import ResearchStepsPanel from "@/components/ResearchStepsPanel";
@@ -569,7 +570,11 @@ export default function CarrierResearch() {
               <tbody className="divide-y divide-slate-100">
                 {carriers.map(carrier => (
                   <tr key={carrier.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">{carrier.legal_name || "Unknown"}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      <Link to={`/carriers/${carrier.id}`} className="hover:text-blue-600 hover:underline">
+                        {carrier.legal_name || "Unknown"}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-slate-600">{carrier.usdot_number || "—"}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
