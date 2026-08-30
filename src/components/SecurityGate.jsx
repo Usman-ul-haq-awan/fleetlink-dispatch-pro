@@ -8,6 +8,7 @@ export default function SecurityGate({ children }) {
   const [screen, setScreen] = useState("loading"); // loading, not_registered, pending, profile, code, app
   const [phone, setPhone] = useState("");
   const [idFile, setIdFile] = useState(null);
+  const [entityType, setEntityType] = useState("staff");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -24,6 +25,7 @@ export default function SecurityGate({ children }) {
       }
       if (!s.has_staff_record) { setScreen("not_registered"); return; }
       if (!s.approved) { setScreen("pending"); return; }
+      if (s.entity_type) setEntityType(s.entity_type);
       if (!s.has_phone || !s.has_id) { setScreen("profile"); return; }
       setScreen("code");
     } catch (err) {
@@ -43,6 +45,7 @@ export default function SecurityGate({ children }) {
     setError("");
     if (!phone.trim()) { setError("Phone number is required"); return; }
     if (!idFile) { setError("ID document is required"); return; }
+    if (!entityType) { setError("Select your entity type"); return; }
     setSubmitting(true);
     try {
       const uploadRes = await base44.integrations.Core.UploadFile({ file: idFile });
@@ -51,6 +54,7 @@ export default function SecurityGate({ children }) {
         phone: phone.trim(),
         identity_document_url: uploadRes.file_url,
         identity_document_name: idFile.name,
+        entity_type: entityType,
       });
       setPhone("");
       setIdFile(null);
@@ -148,6 +152,17 @@ export default function SecurityGate({ children }) {
                   <span className="text-slate-500 truncate">{idFile ? idFile.name : "Click to upload ID (PDF, image)"}</span>
                   <input type="file" accept="image/*,application/pdf" onChange={(e) => setIdFile(e.target.files?.[0] || null)} className="hidden" />
                 </label>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Entity Type *</label>
+                <select value={entityType} onChange={(e) => setEntityType(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="staff">Staff</option>
+                  <option value="student">Student</option>
+                  <option value="visitor">Visitor</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Select your role within the academy. Access is still controlled by the admin-issued login code.</p>
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               <button onClick={handleProfileSubmit} disabled={submitting}

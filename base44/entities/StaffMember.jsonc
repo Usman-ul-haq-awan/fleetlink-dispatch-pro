@@ -20,7 +20,18 @@
         "user"
       ],
       "default": "user",
-      "description": "App role \u2014 admin or staff"
+      "description": "App access role \u2014 admin or user (derived from entity_type)"
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "student",
+        "staff",
+        "visitor"
+      ],
+      "default": "staff",
+      "description": "Classification of the user \u2014 admin, student, staff, or visitor"
     },
     "identity_document_url": {
       "type": "string",
@@ -46,7 +57,7 @@
     },
     "login_code": {
       "type": "string",
-      "description": "4-digit code the staff member must enter on every login"
+      "description": "4-digit code the staff member must enter on every login \u2014 issued by admin only"
     },
     "notes": {
       "type": "string"

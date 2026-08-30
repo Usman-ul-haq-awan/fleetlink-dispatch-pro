@@ -28,6 +28,7 @@ export default async function(req: Request): Promise<Response> {
         has_phone: !!(sm?.phone && String(sm.phone).trim()),
         has_id: !!(sm?.identity_document_url),
         role: user.role || sm?.role || 'user',
+        entity_type: sm?.entity_type || '',
         full_name: sm?.full_name || user.full_name || '',
         login_code_set: !!(sm?.login_code),
       });
@@ -53,6 +54,9 @@ export default async function(req: Request): Promise<Response> {
       if (typeof body.identity_document_url === 'string' && body.identity_document_url) {
         updates.identity_document_url = body.identity_document_url;
         updates.identity_document_name = typeof body.identity_document_name === 'string' ? body.identity_document_name : '';
+      }
+      if (typeof body.entity_type === 'string' && ['admin', 'student', 'staff', 'visitor'].includes(body.entity_type)) {
+        updates.entity_type = body.entity_type;
       }
       await svc.entities.StaffMember.update(sm.id, updates);
       return Response.json({ success: true });

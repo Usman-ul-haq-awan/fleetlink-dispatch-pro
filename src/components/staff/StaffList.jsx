@@ -208,6 +208,7 @@ export default function StaffList({
       email: u.email,
       phone: sm?.phone || "",
       role: u.role || sm?.role || "user",
+      entity_type: sm?.entity_type || "",
       status: sm?.status || (u.full_name ? "Active" : "Invited"),
       identity_document_url: sm?.identity_document_url || "",
       identity_document_name: sm?.identity_document_name || "",
@@ -228,6 +229,7 @@ export default function StaffList({
         email: sm.email,
         phone: sm.phone || "",
         role: sm.role || "user",
+        entity_type: sm.entity_type || "",
         status: sm.status || "Invited",
         identity_document_url: sm.identity_document_url || "",
         identity_document_name: sm.identity_document_name || "",
@@ -272,6 +274,7 @@ export default function StaffList({
               <th className="text-left px-4 py-2 font-medium text-slate-600">Phone</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Approval</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Role</th>
+              <th className="text-left px-4 py-2 font-medium text-slate-600">Entity Type</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">ID Document</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Carrier Allocation</th>
               <th className="text-center px-4 py-2 font-medium text-slate-600">Account Actions</th>
@@ -281,7 +284,7 @@ export default function StaffList({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {merged.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
+              <tr><td colSpan={11} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
             ) : merged.map((m) => (
               <tr key={m.key} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">
@@ -366,6 +369,16 @@ export default function StaffList({
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-flex items-center gap-1 ${m.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
                     {m.role === "admin" ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
                     {m.role === "admin" ? "Admin" : "Staff"}
+                  </span>
+                </td>
+                <td className="px-4 py-2">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                    (m.entity_type || "staff") === "admin" ? "bg-purple-100 text-purple-700" :
+                    (m.entity_type || "staff") === "student" ? "bg-emerald-100 text-emerald-700" :
+                    (m.entity_type || "staff") === "visitor" ? "bg-slate-200 text-slate-600" :
+                    "bg-blue-100 text-blue-700"
+                  }`}>
+                    {m.entity_type || "staff"}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-center">

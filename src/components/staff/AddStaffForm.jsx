@@ -6,7 +6,7 @@ export default function AddStaffForm({ onAdded }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [role, setRole] = useState("user");
+  const [entityType, setEntityType] = useState("staff");
   const [identityFile, setIdentityFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
@@ -30,11 +30,13 @@ export default function AddStaffForm({ onAdded }) {
       }
 
       const loginCode = String(Math.floor(1000 + Math.random() * 9000));
+      const role = entityType === "admin" ? "admin" : "user";
       await base44.entities.StaffMember.create({
         full_name: fullName.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
         role,
+        entity_type: entityType,
         identity_document_url: docUrl,
         identity_document_name: docName,
         status: "Invited",
@@ -56,7 +58,7 @@ export default function AddStaffForm({ onAdded }) {
       setFullName("");
       setEmail("");
       setPhone("");
-      setRole("user");
+      setEntityType("staff");
       setIdentityFile(null);
       if (onAdded) onAdded();
     } catch (err) {
@@ -93,12 +95,15 @@ export default function AddStaffForm({ onAdded }) {
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
         <div>
-          <label className="text-xs font-medium text-slate-600 mb-1 block">Role</label>
-          <select value={role} onChange={e => setRole(e.target.value)}
+          <label className="text-xs font-medium text-slate-600 mb-1 block">Entity Type</label>
+          <select value={entityType} onChange={e => setEntityType(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="user">Staff</option>
+            <option value="staff">Staff</option>
+            <option value="student">Student</option>
+            <option value="visitor">Visitor</option>
             <option value="admin">Admin</option>
           </select>
+          <p className="text-xs text-slate-400 mt-1">Admins get full access; student/staff/visitor get standard access.</p>
         </div>
       </div>
 
