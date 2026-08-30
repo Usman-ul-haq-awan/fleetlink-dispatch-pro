@@ -56,7 +56,7 @@ export default function Layout() {
   };
 
   const isAdmin = user?.role === "admin";
-  const staffAllowedPaths = ["/", "/carriers", "/tools"];
+  const staffAllowedPaths = ["/", "/carriers", "/tools", "/quiz-hub"];
   const visibleNav = navItems.filter(item => {
     // Visitors see all features (view-only); write actions are blocked per-page.
     if (isVisitor) return item.path !== "/settings";
