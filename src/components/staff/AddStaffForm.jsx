@@ -1,44 +1,26 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { UserPlus, Loader2, Upload, IdCard, Mail } from "lucide-react";
+import { UserPlus, Loader2, Mail } from "lucide-react";
 
 export default function AddStaffForm({ onAdded }) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [entityType, setEntityType] = useState("staff");
-  const [identityFile, setIdentityFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) setIdentityFile(file);
-  };
 
   const handleSubmit = async () => {
     if (!fullName || !email) return;
     setSubmitting(true);
     setMessage(null);
     try {
-      let docUrl = "";
-      let docName = "";
-      if (identityFile) {
-        const uploadRes = await base44.integrations.Core.UploadFile({ file: identityFile });
-        docUrl = uploadRes.file_url;
-        docName = identityFile.name;
-      }
-
       const loginCode = String(Math.floor(1000 + Math.random() * 9000));
       const role = entityType === "admin" ? "admin" : "user";
       await base44.entities.StaffMember.create({
         full_name: fullName.trim(),
         email: email.trim().toLowerCase(),
-        phone: phone.trim(),
         role,
         entity_type: entityType,
-        identity_document_url: docUrl,
-        identity_document_name: docName,
         status: "Invited",
         approved: false,
         login_code: loginCode,
@@ -52,14 +34,12 @@ export default function AddStaffForm({ onAdded }) {
 
       setMessage({
         type: "success",
-        text: `${fullName.trim()} added. An invitation email was sent to ${email.trim()}. They must click the "App Access" link in that email to set their own password and activate their account — no password is needed from you.`,
+        text: `${fullName.trim()} added. An invitation email was sent to ${email.trim()}. They must click the "App Access" link in that email to set their own password, then complete their profile (phone, ID, and entity type) before logging in.`,
       });
 
       setFullName("");
       setEmail("");
-      setPhone("");
       setEntityType("staff");
-      setIdentityFile(null);
       if (onAdded) onAdded();
     } catch (err) {
       setMessage({ type: "error", text: err.response?.data?.error || err.message || "Failed to add staff member" });
@@ -89,12 +69,7 @@ export default function AddStaffForm({ onAdded }) {
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@company.com"
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        <div>
-          <label className="text-xs font-medium text-slate-600 mb-1 block">Phone</label>
-          <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 000 0000"
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
+        <div className="md:col-span-2">
           <label className="text-xs font-medium text-slate-600 mb-1 block">Entity Type</label>
           <select value={entityType} onChange={e => setEntityType(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -103,35 +78,15 @@ export default function AddStaffForm({ onAdded }) {
             <option value="visitor">Visitor</option>
             <option value="admin">Admin</option>
           </select>
-          <p className="text-xs text-slate-400 mt-1">Admins get full access; student/staff/visitor get standard access.</p>
+          <p className="text-xs text-slate-400 mt-1">Admins get full access; student/staff/visitor get standard access. The member will confirm their own phone and ID in the profile step.</p>
         </div>
       </div>
 
       <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
         <Mail className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
         <p className="text-xs text-blue-700">
-          An invitation email will be sent automatically. The staff member clicks the <strong>"App Access"</strong> link in that email to set their own password and activate their account — you don't need to create or share a password.
+          An invitation email will be sent automatically. The staff member clicks the <strong>"App Access"</strong> link in that email to set their own password, then completes their profile (phone, ID document, and entity type) before entering the app.
         </p>
-      </div>
-
-      <div className="mb-4">
-        <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
-          <IdCard className="w-3.5 h-3.5" /> Identity Document (ID Card / License)
-        </label>
-        <div className="flex items-center gap-2">
-          <label className="flex-1 flex items-center gap-2 px-3 py-2 text-sm border border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50">
-            <Upload className="w-4 h-4 text-slate-400" />
-            <span className="text-slate-500 truncate">
-              {identityFile ? identityFile.name : "Click to upload ID document (PDF, image)"}
-            </span>
-            <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
-          </label>
-          {identityFile && (
-            <button onClick={() => setIdentityFile(null)} type="button"
-              className="text-xs text-red-500 hover:text-red-700 px-2 py-1">Remove</button>
-          )}
-        </div>
-        <p className="text-xs text-slate-400 mt-1">Stored securely in the database. Admins can retrieve it anytime from the staff list below.</p>
       </div>
 
       {message && (
