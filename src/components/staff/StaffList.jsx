@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 export default function StaffList({
-  users, staffMembers, onRoleChange, onDelete, onApprove, onRegenerateCode, onUpdatePhone, onUpdateId, currentUserId,
+  users, staffMembers, onRoleChange, onEntityTypeChange, onDelete, onApprove, onRegenerateCode, onUpdatePhone, onUpdateId, currentUserId,
 }) {
   const [changingRole, setChangingRole] = useState(null);
   const [resending, setResending] = useState(null);
@@ -255,6 +255,19 @@ export default function StaffList({
     }
   };
 
+  const handleEntityTypeChange = async (e, member) => {
+    const newEntityType = e.target.value;
+    if (newEntityType !== "admin" && member.userId === currentUserId) {
+      if (!window.confirm("You are about to remove YOURSELF from Admin. You will lose access to Settings and staff management. Continue?")) return;
+    }
+    setChangingRole(member.key);
+    try {
+      await onEntityTypeChange(member.userId, member.staffMemberId, newEntityType);
+    } finally {
+      setChangingRole(null);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-5">
       <h3 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
@@ -493,18 +506,18 @@ export default function StaffList({
                   {changingRole === m.key ? (
                     <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
                   ) : (
-                    <button
-                      onClick={() => handleRoleChange(m.userId, m.role === "admin" ? "user" : "admin", m.staffMemberId, m)}
-                      disabled={!m.userId && !m.staffMemberId}
-                      className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border whitespace-nowrap ${
-                        m.role === "admin"
-                          ? "text-amber-700 border-amber-200 hover:bg-amber-50"
-                          : "text-purple-700 border-purple-200 hover:bg-purple-50"
-                      } disabled:opacity-50`}
-                      title={m.role === "admin" ? "Demote to Staff" : "Promote to Admin"}
+                    <select
+                      value={m.entity_type || "staff"}
+                      onChange={(e) => handleEntityTypeChange(e, m)}
+                      disabled={(!m.userId && !m.staffMemberId) || m.userId === currentUserId}
+                      className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+                      title={m.userId === currentUserId ? "You cannot change your own role" : "Change entity type / role"}
                     >
-                      {m.role === "admin" ? <><ChevronDown className="w-3.5 h-3.5" /> Make Staff</> : <><ChevronUp className="w-3.5 h-3.5" /> Make Admin</>}
-                    </button>
+                      <option value="staff">Staff</option>
+                      <option value="student">Student</option>
+                      <option value="visitor">Visitor</option>
+                      <option value="admin">Admin</option>
+                    </select>
                   )}
                 </td>
                 <td className="px-4 py-2 text-center">

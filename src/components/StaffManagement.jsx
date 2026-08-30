@@ -64,6 +64,17 @@ export default function StaffManagement() {
     await load();
   };
 
+  const handleEntityTypeChange = async (userId, staffMemberId, newEntityType) => {
+    const newRole = newEntityType === "admin" ? "admin" : "user";
+    if (staffMemberId) {
+      await base44.entities.StaffMember.update(staffMemberId, { entity_type: newEntityType, role: newRole });
+    }
+    if (userId) {
+      await base44.entities.User.update(userId, { role: newRole });
+    }
+    await load();
+  };
+
   const handleApprove = async (staffMemberId, approved) => {
     const updates = { approved };
     if (approved) {
@@ -118,6 +129,7 @@ export default function StaffManagement() {
           users={users}
           staffMembers={staffMembers}
           onRoleChange={handleRoleChange}
+          onEntityTypeChange={handleEntityTypeChange}
           onDelete={handleDelete}
           onApprove={handleApprove}
           onRegenerateCode={handleRegenerateCode}
