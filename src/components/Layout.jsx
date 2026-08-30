@@ -24,7 +24,7 @@ const navItems = [
   { label: "Import / Export", path: "/import-export", icon: Download },
   { label: "Activity Log", path: "/activity", icon: Activity },
   { label: "Dispatch Tools", path: "/tools", icon: Calculator },
-  { label: "Quiz Hub", path: "/quiz-hub", icon: GraduationCap },
+  { label: "Knowledge Base", path: "/quiz-hub", icon: GraduationCap },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
