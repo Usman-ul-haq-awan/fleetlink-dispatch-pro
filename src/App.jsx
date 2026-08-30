@@ -27,6 +27,7 @@ import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import DispatchTools from '@/pages/DispatchTools';
+import IncomeCalculatorPage from '@/pages/IncomeCalculatorPage';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
@@ -49,6 +50,7 @@ const AuthenticatedApp = () => {
     <Routes>
       {/* Auth routes - accessible without authentication */}
       <Route path="/dispatch-tools" element={<DispatchTools />} />
+      <Route path="/income-calculator" element={<IncomeCalculatorPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
