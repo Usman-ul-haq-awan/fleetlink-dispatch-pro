@@ -26,6 +26,7 @@ import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+import DispatchTools from '@/pages/DispatchTools';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
@@ -47,6 +48,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       {/* Auth routes - accessible without authentication */}
+      <Route path="/dispatch-tools" element={<DispatchTools />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
