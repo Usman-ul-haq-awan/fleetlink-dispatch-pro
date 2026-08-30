@@ -1,13 +1,15 @@
 import React, { useState } from "react";
-import { Calculator, Wallet, FileText } from "lucide-react";
+import { Calculator, Wallet, FileText, Fuel } from "lucide-react";
 import ProfitCalculator from "@/components/tools/ProfitCalculator";
 import IncomeCalculator from "@/components/tools/IncomeCalculator";
 import InvoiceGenerator from "@/components/tools/InvoiceGenerator";
+import FuelSurchargeCalculator from "@/components/tools/FuelSurchargeCalculator";
 
 const TABS = [
   { id: "profit", label: "Profit Calculator", icon: Calculator, Component: ProfitCalculator },
   { id: "income", label: "Income Calculator", icon: Wallet, Component: IncomeCalculator },
   { id: "invoice", label: "Invoice Generator", icon: FileText, Component: InvoiceGenerator },
+  { id: "fuel", label: "Fuel Surcharge", icon: Fuel, Component: FuelSurchargeCalculator },
 ];
 
 export default function ToolsPanel() {
