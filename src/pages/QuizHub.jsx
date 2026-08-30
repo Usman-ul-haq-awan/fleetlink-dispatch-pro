@@ -1,10 +1,20 @@
-import React, { useState } from "react";
-import { BookOpen, ArrowLeft, GraduationCap } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { BookOpen, ArrowLeft, GraduationCap, BarChart3 } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 import { QUIZ_MODULES } from "@/data/quizModules";
 import QuizRunner from "@/components/quiz/QuizRunner";
+import QuizResultsAdmin from "@/components/quiz/QuizResultsAdmin";
 
 export default function QuizHub() {
   const [selected, setSelected] = useState(null);
+  const [user, setUser] = useState(null);
+  const [tab, setTab] = useState("modules");
+
+  useEffect(() => {
+    base44.auth.me().then(setUser).catch(() => {});
+  }, []);
+
+  const isAdmin = user?.role === "admin";
 
   if (selected) {
     return (
@@ -26,33 +36,52 @@ export default function QuizHub() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <GraduationCap className="w-7 h-7 text-blue-700" />
-          Quiz Hub
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Tycoon Dispatch Academy — 23-module truck dispatching course. Pass each module quiz with 70%+ to claim your certificate.
-        </p>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <GraduationCap className="w-7 h-7 text-blue-700" />
+            Quiz Hub
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Tycoon Dispatch Academy — 23-module truck dispatching course. Pass each module quiz with 70%+ to claim your certificate.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {QUIZ_MODULES.map((m) => (
-          <button key={m.module} onClick={() => setSelected(m)}
-            className="text-left bg-white rounded-lg border border-slate-200 p-4 hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all group">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-800 text-white flex items-center justify-center font-bold text-sm">
-                {m.module}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-400 font-medium mb-0.5">Module {m.module} of 23</p>
-                <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 leading-snug">{m.title}</p>
-              </div>
-              <BookOpen className="w-4 h-4 text-slate-300 group-hover:text-blue-500 flex-shrink-0 mt-1" />
-            </div>
+      <div className="flex gap-1 mb-6 border-b border-slate-200">
+        <button onClick={() => setTab("modules")}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "modules" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+          <BookOpen className="w-4 h-4" /> Modules
+        </button>
+        {isAdmin && (
+          <button onClick={() => setTab("results")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "results" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            <BarChart3 className="w-4 h-4" /> Student Results
           </button>
-        ))}
+        )}
       </div>
+
+      {tab === "results" && isAdmin ? (
+        <QuizResultsAdmin />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {QUIZ_MODULES.map((m) => (
+            <button key={m.module} onClick={() => setSelected(m)}
+              className="text-left bg-white rounded-lg border border-slate-200 p-4 hover:border-blue-400 hover:shadow-md hover:-translate-y-0.5 transition-all group">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-800 text-white flex items-center justify-center font-bold text-sm">
+                  {m.module}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-slate-400 font-medium mb-0.5">Module {m.module} of 23</p>
+                  <p className="text-sm font-semibold text-slate-800 group-hover:text-blue-700 leading-snug">{m.title}</p>
+                </div>
+                <BookOpen className="w-4 h-4 text-slate-300 group-hover:text-blue-500 flex-shrink-0 mt-1" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

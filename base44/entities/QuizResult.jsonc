@@ -1,0 +1,60 @@
+{
+  "name": "QuizResult",
+  "type": "object",
+  "properties": {
+    "student_name": {
+      "type": "string",
+      "description": "Full name of the student who attempted the quiz"
+    },
+    "student_email": {
+      "type": "string",
+      "description": "Email address the result was sent to"
+    },
+    "whatsapp": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Linked User entity ID of the logged-in student"
+    },
+    "module_number": {
+      "type": "number"
+    },
+    "module_title": {
+      "type": "string"
+    },
+    "score": {
+      "type": "number",
+      "description": "Number of correct answers"
+    },
+    "total": {
+      "type": "number",
+      "description": "Total questions in the attempt"
+    },
+    "percentage": {
+      "type": "number"
+    },
+    "passed": {
+      "type": "boolean",
+      "default": false
+    },
+    "email_sent": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the result email was delivered to the student"
+    },
+    "email_sent_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "student_name",
+    "module_number",
+    "module_title",
+    "score",
+    "total",
+    "percentage",
+    "passed"
+  ]
+}

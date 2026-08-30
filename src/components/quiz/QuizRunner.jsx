@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Clock, CheckCircle, XCircle, Award, RotateCcw, ChevronRight } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 import { fetchQuestionBank, submitQuizResult } from "@/data/quizModules";
 
 const QUESTION_COUNT = 20;
@@ -30,6 +31,17 @@ export default function QuizRunner({ module, title, onExit }) {
   const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
   const [result, setResult] = useState(null);
   const timerRef = useRef(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [savedResultId, setSavedResultId] = useState(null);
+  const [emailSent, setEmailSent] = useState(false);
+  const [savingResult, setSavingResult] = useState(false);
+
+  useEffect(() => {
+    base44.auth.me().then((u) => {
+      setCurrentUser(u);
+      if (u) setStudent((s) => ({ ...s, name: u.full_name || s.name, email: u.email || s.email }));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -120,6 +132,34 @@ export default function QuizRunner({ module, title, onExit }) {
       pct,
       passed,
     });
+    // Persist to CRM and email the student their result
+    (async () => {
+      setSavingResult(true);
+      try {
+        const rec = await base44.entities.QuizResult.create({
+          student_name: student.name,
+          student_email: student.email,
+          whatsapp: student.whatsapp || "",
+          user_id: currentUser?.id || "",
+          module_number: module,
+          module_title: title,
+          score: finalScore,
+          total,
+          percentage: pct,
+          passed,
+          email_sent: false,
+        });
+        setSavedResultId(rec.id);
+        if (student.email) {
+          const res = await base44.functions.invoke("sendQuizResult", { quiz_result_id: rec.id });
+          setEmailSent(!!res.data?.email_sent);
+        }
+      } catch (err) {
+        console.error("Save quiz result error:", err);
+      } finally {
+        setSavingResult(false);
+      }
+    })();
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (phase === "loading") {
@@ -261,6 +301,11 @@ export default function QuizRunner({ module, title, onExit }) {
                 <p className="text-xs text-slate-500 mt-2">Score: {result.pct}% · {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
                 <p className="text-[10px] text-slate-400 mt-3">Tycoon Dispatch Academy · Tycoon Logistics</p>
               </div>
+              <div className="text-xs text-slate-500 mb-4 flex items-center justify-center gap-1.5">
+                {savingResult ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving your result…</>
+                  : emailSent ? <><CheckCircle className="w-3.5 h-3.5 text-green-600" /> Result saved & emailed to {student.email}</>
+                  : savedResultId ? <><CheckCircle className="w-3.5 h-3.5 text-slate-400" /> Result saved to your records</> : null}
+              </div>
               <div className="flex gap-2 mt-5">
                 <button onClick={() => setPhase("form")} className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold py-2.5 rounded-full transition-colors">
                   <RotateCcw className="w-4 h-4" /> Retake
@@ -285,6 +330,11 @@ export default function QuizRunner({ module, title, onExit }) {
                 <div className="bg-red-50 rounded-lg p-3"><p className="text-2xl font-bold text-red-700">{result.pct}%</p><p className="text-xs text-slate-500">Score</p></div>
               </div>
               <p className="text-sm text-slate-600 mb-5">Review the module material and try again. Every attempt draws different questions from the bank.</p>
+              <div className="text-xs text-slate-500 mb-4 flex items-center justify-center gap-1.5">
+                {savingResult ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving your result…</>
+                  : emailSent ? <><CheckCircle className="w-3.5 h-3.5 text-green-600" /> Result saved & emailed to {student.email}</>
+                  : savedResultId ? <><CheckCircle className="w-3.5 h-3.5 text-slate-400" /> Result saved to your records</> : null}
+              </div>
               <div className="flex gap-2">
                 <button onClick={() => setPhase("form")} className="flex-1 flex items-center justify-center gap-2 bg-blue-800 hover:bg-red-600 text-white text-sm font-bold py-2.5 rounded-full transition-colors">
                   <RotateCcw className="w-4 h-4" /> Try Again
