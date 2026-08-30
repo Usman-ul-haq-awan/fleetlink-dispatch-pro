@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, Lock } from "lucide-react";
+import { useEntity } from "@/lib/entityContext";
 import * as XLSX from "xlsx";
 
 function parseCSV(text) {
@@ -73,6 +74,7 @@ export default function ImportExport() {
   const [exporting, setExporting] = useState(false);
   const [fileName, setFileName] = useState("");
   const fileRef = useRef(null);
+  const { isVisitor } = useEntity();
 
   const handleFile = async (file) => {
     setFileName(file.name);
@@ -216,6 +218,16 @@ export default function ImportExport() {
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Import / Export</h1>
 
+      {isVisitor && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-start gap-2">
+          <Lock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">View-only access</p>
+            <p className="text-xs text-amber-700 mt-0.5">As a visitor you can browse this page, but importing and exporting data is disabled.</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-2 mb-6">
         <button onClick={() => setTab("import")}
           className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "import" ? "bg-blue-600 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
@@ -235,7 +247,7 @@ export default function ImportExport() {
               <p className="text-slate-600 mb-2">Upload a CSV or Excel file with carrier data</p>
               <p className="text-xs text-slate-400 mb-4">Supports .csv, .xlsx, .xls — columns: USDOT, MC, Company Name, Phone, Email, State, Equipment</p>
               <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = ""; }} />
-              <button onClick={() => fileRef.current?.click()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+              <button onClick={() => fileRef.current?.click()} disabled={isVisitor} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 Select File
               </button>
             </div>
@@ -285,7 +297,7 @@ export default function ImportExport() {
                 </table>
               </div>
 
-              <button onClick={handleImport} disabled={importing}
+              <button onClick={handleImport} disabled={importing || isVisitor}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
                 {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 {importing ? "Importing..." : `Import ${parsedData.rows.length} Carriers`}
@@ -336,12 +348,12 @@ export default function ImportExport() {
           <p className="text-sm text-slate-500 mb-4">Download all carrier data as a CSV file with separate columns for every field.</p>
           <p className="text-xs text-slate-400 mb-4">Includes: Carrier Name, DBA, USDOT, MC, MX, Status, Address, Phone, Fax, Email, Owner, Contact, Power Units, Drivers, Cargo, Equipment, Safety Qualification, Lead Score, Source URLs, and more.</p>
           <div className="flex items-center justify-center gap-3">
-            <button onClick={() => handleExport("csv")} disabled={exporting}
+            <button onClick={() => handleExport("csv")} disabled={exporting || isVisitor}
               className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 disabled:opacity-50">
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Export to CSV
             </button>
-            <button onClick={() => handleExport("excel")} disabled={exporting}
+            <button onClick={() => handleExport("excel")} disabled={exporting || isVisitor}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               Export to Excel

@@ -181,7 +181,13 @@ export default function NotificationBell({ dark = false }) {
                           {n.type === "broadcast" && <span className="text-[9px] font-bold uppercase bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Broadcast</span>}
                         </div>
                         <p className="font-medium text-sm text-slate-900 mt-1">{n.title}</p>
-                        <p className="text-xs text-slate-600 mt-0.5 break-words">{n.message}</p>
+                        <p className="text-xs text-slate-600 mt-0.5 break-words">
+                          {n.message.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+                            /^https?:\/\//.test(part)
+                              ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{part}</a>
+                              : <React.Fragment key={i}>{part}</React.Fragment>
+                          )}
+                        </p>
                         <p className="text-[10px] text-slate-400 mt-1">
                           {n.from_user_name ? `From ${n.from_user_name} · ` : ""}{new Date(n.created_at || n.created_date).toLocaleString()}
                         </p>

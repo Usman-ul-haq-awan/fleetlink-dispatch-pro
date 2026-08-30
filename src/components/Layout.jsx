@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ChatWithUs from "@/components/ChatWithUs";
+import { useEntity } from "@/lib/entityContext";
+import { Image } from "@/components/ui/image";
 
 const navItems = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -31,11 +33,16 @@ export default function Layout() {
   const [user, setUser] = React.useState(null);
   const [outreachEnabled, setOutreachEnabled] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [companyLogo, setCompanyLogo] = React.useState("");
+  const { isVisitor } = useEntity();
 
   React.useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
     base44.entities.AppSetting.filter({ setting_key: "outreach_enabled" })
       .then(res => { if (res.length > 0) setOutreachEnabled(res[0].setting_value === "true"); })
+      .catch(() => {});
+    base44.entities.AppSetting.filter({ setting_key: "company_logo_url" })
+      .then(res => { if (res.length > 0 && res[0].setting_value) setCompanyLogo(res[0].setting_value); })
       .catch(() => {});
   }, []);
 
@@ -51,6 +58,8 @@ export default function Layout() {
   const isAdmin = user?.role === "admin";
   const staffAllowedPaths = ["/", "/carriers", "/tools"];
   const visibleNav = navItems.filter(item => {
+    // Visitors see all features (view-only); write actions are blocked per-page.
+    if (isVisitor) return item.path !== "/settings";
     // Staff (non-admin) only see Dashboard and Carrier Database.
     if (!isAdmin) return staffAllowedPaths.includes(item.path);
     // Admin sees everything, gated by outreach toggle for campaigns/calling.
@@ -62,7 +71,11 @@ export default function Layout() {
     <>
       <div className="px-5 py-5 border-b border-slate-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Truck className="w-7 h-7 text-blue-400" />
+          {companyLogo ? (
+            <Image src={companyLogo} alt="Logo" className="w-9 h-9 rounded-lg object-cover" fittingType="fit" />
+          ) : (
+            <Truck className="w-7 h-7 text-blue-400" />
+          )}
           <div>
             <h1 className="text-white font-bold text-lg leading-tight">Dispatch CRM</h1>
             <p className="text-xs text-slate-400">Carrier Management</p>

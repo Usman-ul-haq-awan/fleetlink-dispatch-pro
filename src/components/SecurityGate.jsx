@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Loader2, Phone, Upload, KeyRound, AlertCircle, LogOut, IdCard, Clock, ShieldCheck } from "lucide-react";
+import { EntityProvider } from "@/lib/entityContext";
 
 const SESSION_KEY = "fleetlink_session_authenticated";
 
@@ -91,7 +92,7 @@ export default function SecurityGate({ children }) {
     base44.auth.logout(window.location.origin + "/login");
   };
 
-  if (screen === "app") return children;
+  if (screen === "app") return <EntityProvider entityType={entityType}>{children}</EntityProvider>;
   if (screen === "loading") {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-slate-50">
