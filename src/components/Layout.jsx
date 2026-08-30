@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import {
   LayoutDashboard, Database, Search, ShieldCheck, ShieldAlert, Mail, Phone,
   UserCheck, ClipboardCheck, Download, Activity, Settings, LogOut,
-  Truck, Send, Menu, X, Calculator
+  Truck, Send, Menu, X, Calculator, GraduationCap
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ChatWithUs from "@/components/ChatWithUs";
@@ -22,6 +22,7 @@ const navItems = [
   { label: "Import / Export", path: "/import-export", icon: Download },
   { label: "Activity Log", path: "/activity", icon: Activity },
   { label: "Dispatch Tools", path: "/tools", icon: Calculator },
+  { label: "Quiz Hub", path: "/quiz-hub", icon: GraduationCap },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 

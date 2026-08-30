@@ -29,6 +29,7 @@ import ResetPassword from '@/pages/ResetPassword';
 import DispatchTools from '@/pages/DispatchTools';
 import IncomeCalculatorPage from '@/pages/IncomeCalculatorPage';
 import Tools from '@/pages/Tools';
+import QuizHub from '@/pages/QuizHub';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
@@ -74,6 +75,7 @@ const AuthenticatedApp = () => {
         <Route path="/activity" element={<ActivityLog />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/tools" element={<Tools />} />
+        <Route path="/quiz-hub" element={<QuizHub />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />
