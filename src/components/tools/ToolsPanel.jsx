@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Calculator, Wallet, FileText, Fuel, MapPin } from "lucide-react";
+import { Calculator, Wallet, FileText, Fuel, MapPin, ClipboardList } from "lucide-react";
 import ProfitCalculator from "@/components/tools/ProfitCalculator";
 import IncomeCalculator from "@/components/tools/IncomeCalculator";
 import InvoiceGenerator from "@/components/tools/InvoiceGenerator";
 import FuelSurchargeCalculator from "@/components/tools/FuelSurchargeCalculator";
 import MileageEstimator from "@/components/tools/MileageEstimator";
+import WeeklyLoadTracker from "@/components/tools/WeeklyLoadTracker";
 
 const TABS = [
   { id: "profit", label: "Profit Calculator", icon: Calculator, Component: ProfitCalculator },
@@ -12,6 +13,7 @@ const TABS = [
   { id: "invoice", label: "Invoice Generator", icon: FileText, Component: InvoiceGenerator },
   { id: "fuel", label: "Fuel Surcharge", icon: Fuel, Component: FuelSurchargeCalculator },
   { id: "mileage", label: "Mileage Estimator", icon: MapPin, Component: MileageEstimator },
+  { id: "tracker", label: "Weekly Load Tracker", icon: ClipboardList, Component: WeeklyLoadTracker },
 ];
 
 export default function ToolsPanel() {
