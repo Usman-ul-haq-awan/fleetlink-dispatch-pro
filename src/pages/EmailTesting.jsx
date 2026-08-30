@@ -45,6 +45,7 @@ export default function EmailTesting() {
   const [testBody, setTestBody] = useState("This is a test email from the FleetLink Email Engine to verify that CC and BCC recipients are receiving messages correctly.");
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [health, setHealth] = useState({ sample: 0, sent: 0, bounced: 0, replied: 0, failed: 0, bounceRate: 0, replyRate: 0, failRate: 0, rating: "—", ratingColor: "slate" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +53,35 @@ export default function EmailTesting() {
       const all = await listAllCarriers("-updated_date");
       const logs = await base44.entities.EmailLog.list("-sent_at", 30);
       setRecentLogs(logs);
+
+      // Deliverability health — sample the most recent 500 outbound emails
+      const sample = await base44.entities.EmailLog.filter({ direction: "Outbound" }, "-sent_at", 500);
+      const sentCount = sample.filter((l) => l.status === "Sent").length;
+      const bouncedCount = sample.filter((l) => l.status === "Bounced").length;
+      const repliedCount = sample.filter((l) => l.status === "Replied").length;
+      const failedCount = sample.filter((l) => l.status === "Failed").length;
+      const delivered = sentCount + bouncedCount + repliedCount; // excludes queued/failed
+      const bounceRate = delivered > 0 ? (bouncedCount / delivered) * 100 : 0;
+      const replyRate = sentCount > 0 ? (repliedCount / sentCount) * 100 : 0;
+      const failRate = sample.length > 0 ? (failedCount / sample.length) * 100 : 0;
+      // Simple inbox-health rating based on bounce rate (the strongest spam signal)
+      let rating = "Excellent";
+      let ratingColor = "green";
+      if (bounceRate >= 10) { rating = "Poor — high bounce risk"; ratingColor = "red"; }
+      else if (bounceRate >= 5) { rating = "Caution — clean your list"; ratingColor = "amber"; }
+      else if (bounceRate >= 2) { rating = "Good"; ratingColor = "blue"; }
+      setHealth({
+        sample: sample.length,
+        sent: sentCount,
+        bounced: bouncedCount,
+        replied: repliedCount,
+        failed: failedCount,
+        bounceRate: Math.round(bounceRate * 10) / 10,
+        replyRate: Math.round(replyRate * 10) / 10,
+        failRate: Math.round(failRate * 10) / 10,
+        rating,
+        ratingColor,
+      });
 
       const hasEmail = all.filter((c) => c.email && !c.do_not_contact);
       const terminal = ["Active Client", "Do Not Contact", "Onboarding", "Human Handoff", "Interested"];
@@ -384,6 +414,52 @@ export default function EmailTesting() {
           <p className="text-sm text-red-700">{runResult.error}</p>
         </div>
       )}
+
+      {/* Deliverability Health */}
+      <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+            Deliverability Health
+          </h2>
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            health.ratingColor === "green" ? "bg-green-100 text-green-700" :
+            health.ratingColor === "blue" ? "bg-blue-100 text-blue-700" :
+            health.ratingColor === "amber" ? "bg-amber-100 text-amber-700" :
+            health.ratingColor === "red" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
+          }`}>
+            {health.rating}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Based on the last {health.sample} outbound emails. Bounce rate is the strongest inbox-vs-spam signal — keep it under 5%.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="rounded-lg border p-3 bg-green-50 border-green-200">
+            <p className="text-2xl font-bold text-green-700">{health.sent}</p>
+            <p className="text-xs font-medium text-green-700/80">Sent</p>
+          </div>
+          <div className="rounded-lg border p-3 bg-red-50 border-red-200">
+            <p className="text-2xl font-bold text-red-700">{health.bounced} <span className="text-sm font-normal">({health.bounceRate}%)</span></p>
+            <p className="text-xs font-medium text-red-700/80">Bounced</p>
+          </div>
+          <div className="rounded-lg border p-3 bg-blue-50 border-blue-200">
+            <p className="text-2xl font-bold text-blue-700">{health.replied} <span className="text-sm font-normal">({health.replyRate}%)</span></p>
+            <p className="text-xs font-medium text-blue-700/80">Replied</p>
+          </div>
+          <div className="rounded-lg border p-3 bg-amber-50 border-amber-200">
+            <p className="text-2xl font-bold text-amber-700">{health.failed} <span className="text-sm font-normal">({health.failRate}%)</span></p>
+            <p className="text-xs font-medium text-amber-700/80">Failed</p>
+          </div>
+        </div>
+        <div className="mt-3 text-xs text-slate-500">
+          {health.bounceRate >= 5
+            ? "⚠️ Bounce rate is high — pause the engine and remove invalid/role addresses from your carrier list to protect your sender reputation."
+            : health.sample === 0
+              ? "No emails sent yet. Send a test or run the engine to start measuring deliverability."
+              : "✅ Bounce rate is within a healthy range — your domain authentication is working and inbox placement should be strong."}
+        </div>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
