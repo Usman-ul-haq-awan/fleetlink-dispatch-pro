@@ -28,6 +28,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import DispatchTools from '@/pages/DispatchTools';
 import IncomeCalculatorPage from '@/pages/IncomeCalculatorPage';
+import Tools from '@/pages/Tools';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
@@ -72,6 +73,7 @@ const AuthenticatedApp = () => {
         <Route path="/import-export" element={<ImportExport />} />
         <Route path="/activity" element={<ActivityLog />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/tools" element={<Tools />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

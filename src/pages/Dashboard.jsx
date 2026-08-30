@@ -5,6 +5,7 @@ import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, Che
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
 import AllocationSection from "@/components/AllocationSection";
+import ToolsPanel from "@/components/tools/ToolsPanel";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 
@@ -251,6 +252,16 @@ export default function Dashboard() {
             Allocations
           </button>
         )}
+        <button
+          onClick={() => setActiveTab("tools")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "tools"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Tools
+        </button>
       </div>
 
       {activeTab === "overview" ? (
@@ -353,6 +364,8 @@ export default function Dashboard() {
         <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
       ) : activeTab === "allocations" ? (
         <AllocationSection />
+      ) : activeTab === "tools" ? (
+        <ToolsPanel />
       ) : (
         <BrokersTable brokers={brokers} loading={loadingBrokers} onRescan={rescanBroker} rescanning={rescanningBroker} />
       )}

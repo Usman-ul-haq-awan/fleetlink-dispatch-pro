@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import {
   LayoutDashboard, Database, Search, ShieldCheck, ShieldAlert, Mail, Phone,
   UserCheck, ClipboardCheck, Download, Activity, Settings, LogOut,
-  Truck, Send, Menu, X
+  Truck, Send, Menu, X, Calculator
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ChatWithUs from "@/components/ChatWithUs";
@@ -21,6 +21,7 @@ const navItems = [
   { label: "Broker Vetting", path: "/brokers", icon: ShieldAlert },
   { label: "Import / Export", path: "/import-export", icon: Download },
   { label: "Activity Log", path: "/activity", icon: Activity },
+  { label: "Dispatch Tools", path: "/tools", icon: Calculator },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -47,7 +48,7 @@ export default function Layout() {
   };
 
   const isAdmin = user?.role === "admin";
-  const staffAllowedPaths = ["/", "/carriers"];
+  const staffAllowedPaths = ["/", "/carriers", "/tools"];
   const visibleNav = navItems.filter(item => {
     // Staff (non-admin) only see Dashboard and Carrier Database.
     if (!isAdmin) return staffAllowedPaths.includes(item.path);
