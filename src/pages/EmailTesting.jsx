@@ -38,6 +38,13 @@ export default function EmailTesting() {
   const [ccInput, setCcInput] = useState("tycoon.tours.business@gmail.com");
   const [savingCc, setSavingCc] = useState(false);
   const [previewMode, setPreviewMode] = useState("template"); // "template" | "last_sent"
+  const [testTo, setTestTo] = useState("");
+  const [testCc, setTestCc] = useState("");
+  const [testBcc, setTestBcc] = useState("");
+  const [testSubject, setTestSubject] = useState("Dispatch Test — verifying CC & BCC");
+  const [testBody, setTestBody] = useState("This is a test email from the FleetLink Email Engine to verify that CC and BCC recipients are receiving messages correctly.");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,6 +195,25 @@ export default function EmailTesting() {
 
   useEffect(() => { loadPreview(); }, [loadPreview]);
 
+  const sendTestEmail = async () => {
+    setSendingTest(true);
+    setTestResult(null);
+    try {
+      const res = await base44.functions.invoke("sendTestEmail", {
+        to_email: testTo,
+        subject: testSubject,
+        body: testBody,
+        cc: testCc ? testCc.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+        bcc: testBcc ? testBcc.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+      });
+      setTestResult({ success: true, message: res.data?.message || "Test email sent" });
+    } catch (err) {
+      setTestResult({ error: err.response?.data?.error || err.message });
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
   const runNow = async () => {
     setRunning(true);
     setRunResult(null);
@@ -262,6 +288,61 @@ export default function EmailTesting() {
             {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             {running ? "Running..." : "Run Now"}
           </button>
+        </div>
+      </div>
+
+      {/* Send Test Email — verify CC/BCC delivery */}
+      <div className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
+        <h2 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+          <Send className="w-5 h-5 text-green-600" />
+          Send Test Email
+        </h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Send a test email to any address to verify CC and BCC recipients receive messages. Great for showing associates the email pipeline works.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-slate-500">To *</label>
+            <input type="email" value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="associate@example.com"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">CC (comma-separated)</label>
+            <input type="text" value={testCc} onChange={e => setTestCc(e.target.value)} placeholder={ccEmail || "cc@example.com"}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">BCC (comma-separated)</label>
+            <input type="text" value={testBcc} onChange={e => setTestBcc(e.target.value)} placeholder="bcc@example.com"
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Subject</label>
+            <input type="text" value={testSubject} onChange={e => setTestSubject(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-slate-500">Body</label>
+            <textarea value={testBody} onChange={e => setTestBody(e.target.value)} rows={3}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={sendTestEmail} disabled={sendingTest || !testTo || !testSubject}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+            {sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sendingTest ? "Sending..." : "Send Test Email"}
+          </button>
+          {testResult?.success && (
+            <span className="flex items-center gap-1.5 text-sm text-green-700">
+              <CheckCircle className="w-4 h-4" /> {testResult.message}
+            </span>
+          )}
+          {testResult?.error && (
+            <span className="flex items-center gap-1.5 text-sm text-red-600">
+              <AlertCircle className="w-4 h-4" /> {testResult.error}
+            </span>
+          )}
         </div>
       </div>
 

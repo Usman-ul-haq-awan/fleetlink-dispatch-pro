@@ -13,7 +13,7 @@ const DEFAULT_CC_EMAIL = "tycoon.tours.business@gmail.com";
 
 export async function sendEmail(
   base44: any,
-  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; requireSmtp?: boolean; cc?: string[] }
+  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; requireSmtp?: boolean; cc?: string[]; bcc?: string[] }
 ): Promise<{ provider: string; messageId?: string }> {
   const { to, subject, body, html, fromName } = opts;
 
@@ -57,6 +57,7 @@ export async function sendEmail(
       from: fromAddr,
       to: [to],
       cc: ccEmails,
+      bcc: opts.bcc && opts.bcc.length > 0 ? opts.bcc : undefined,
       subject,
       text: body || "",
       ...(html ? { html } : {}),

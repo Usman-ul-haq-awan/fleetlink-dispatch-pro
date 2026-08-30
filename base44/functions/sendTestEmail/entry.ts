@@ -12,10 +12,15 @@ export default async function sendTestEmail(req: Request): Promise<Response> {
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { to_email, subject, body: emailBody, carrier_id } = body;
+    const { to_email, subject, body: emailBody, carrier_id, cc, bcc } = body;
 
     if (!to_email) return Response.json({ error: "to_email is required" }, { status: 400 });
     if (!subject) return Response.json({ error: "subject is required" }, { status: 400 });
+
+    // Normalize CC/BCC into arrays of trimmed emails
+    const toArr = (v: any) =>
+      Array.isArray(v) ? v.map((s: string) => s.trim()).filter(Boolean)
+      : (typeof v === "string" && v.trim() ? v.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
 
     // Use company name as sender if configured
     const settings = await base44.entities.AppSetting.filter({ setting_key: "company_name" });
@@ -31,6 +36,8 @@ export default async function sendTestEmail(req: Request): Promise<Response> {
       body: emailBody || "",
       fromName,
       requireSmtp: true,
+      cc: toArr(cc),
+      bcc: toArr(bcc),
     });
 
     // Log the test send (carrier_id optional, only for traceability)
