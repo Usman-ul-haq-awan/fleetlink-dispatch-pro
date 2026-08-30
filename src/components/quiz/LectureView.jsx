@@ -1,10 +1,12 @@
 import React from "react";
 import Module1Lecture from "./Module1Lecture";
+import Module2Lecture from "./Module2Lecture";
 
 // Registry of lecture components per module. Only modules with authored
 // lecture content are listed here; others fall back to the "coming soon" state.
 const LECTURES = {
   1: Module1Lecture,
+  2: Module2Lecture,
 };
 
 export default function LectureView({ module, title, onStartQuiz }) {
