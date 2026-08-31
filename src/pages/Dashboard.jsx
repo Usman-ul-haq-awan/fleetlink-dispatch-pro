@@ -8,6 +8,7 @@ import AllocationSection from "@/components/AllocationSection";
 import ToolsPanel from "@/components/tools/ToolsPanel";
 import { listAllCarriers, listCarriersForUser, listAllEmailLogs } from "@/lib/paginatedList";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
+import { useEntity } from "@/lib/entityContext";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [brokers, setBrokers] = useState([]);
   const [loadingBrokers, setLoadingBrokers] = useState(false);
   const [rescanningBroker, setRescanningBroker] = useState(null);
+  const { isVisitor } = useEntity();
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
@@ -92,8 +94,8 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (activeTab === "brokers") loadBrokers();
-  }, [activeTab]);
+    if (activeTab === "brokers" && !isVisitor) loadBrokers();
+  }, [activeTab, isVisitor]);
 
   const rescanBroker = async (b) => {
     setRescanningBroker(b.id);
@@ -119,11 +121,13 @@ export default function Dashboard() {
       let carriers = (!isAdmin && user)
         ? await listCarriersForUser(user.id, "-updated_date")
         : await listAllCarriers("-updated_date");
-      const emails = await listAllEmailLogs("-sent_at");
-      const calls = await base44.entities.CallLog.list("-call_date", 200);
-      const handoffs = await base44.entities.Handoff.list("-created_at", 100);
-      const onboardingRecords = await base44.entities.Onboarding.list("-updated_at", 200);
-      const activity = await base44.entities.ActivityLog.list("-timestamp", 15);
+      // Visitors must not see company data — skip all operational fetches so
+      // stat cards render as 0 and recent activity stays empty.
+      const emails = isVisitor ? [] : await listAllEmailLogs("-sent_at");
+      const calls = isVisitor ? [] : await base44.entities.CallLog.list("-call_date", 200);
+      const handoffs = isVisitor ? [] : await base44.entities.Handoff.list("-created_at", 100);
+      const onboardingRecords = isVisitor ? [] : await base44.entities.Onboarding.list("-updated_at", 200);
+      const activity = isVisitor ? [] : await base44.entities.ActivityLog.list("-timestamp", 15);
 
       const countBy = (arr, field, value) => arr.filter(x => x[field] === value).length;
 
