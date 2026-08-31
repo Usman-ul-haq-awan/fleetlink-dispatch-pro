@@ -28,6 +28,10 @@ export default function SecurityGate({ children }) {
       if (!s.approved) { setScreen("pending"); return; }
       if (s.entity_type) setEntityType(s.entity_type);
       if (!s.has_phone || !s.has_id) { setScreen("profile"); return; }
+      // PIN already verified earlier in this browser session (e.g. in another
+      // tab) — skip the re-prompt so opening a carrier in a new tab goes
+      // straight into the app. The flag is cleared when the last tab closes.
+      if (localStorage.getItem(SESSION_KEY) === "true") { setScreen("app"); return; }
       setScreen("code");
     } catch (err) {
       setError(err.message || "Failed to check auth status");
