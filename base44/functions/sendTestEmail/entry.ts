@@ -31,10 +31,16 @@ export default async function sendTestEmail(req: Request): Promise<Response> {
 
     const now = new Date().toISOString();
 
+    // When branded=true, wrap the plain-text body in the company HTML template
+    // (logo header + footer) so the email matches the campaign format.
+    const plainBody = emailBody || "";
+    const htmlBody = branded ? wrapBodyAsHtml(subject, plainBody) : undefined;
+
     const sendResult = await sendEmail(base44, {
       to: to_email,
       subject,
-      body: emailBody || "",
+      body: plainBody,
+      html: htmlBody,
       fromName,
       requireSmtp: true,
       cc: toArr(cc),

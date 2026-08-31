@@ -28,6 +28,8 @@ export default function DirectCarrierEmail({ ccEmail }) {
   const [showResults, setShowResults] = useState(false);
   const [selected, setSelected] = useState(null);
   const [toEmail, setToEmail] = useState("");
+  const [ccInput, setCcInput] = useState("");
+  const [bccInput, setBccInput] = useState("");
   const [subject, setSubject] = useState(DEFAULT_SUBJECT);
   const [body, setBody] = useState(DEFAULT_BODY);
   const [sending, setSending] = useState(false);
@@ -76,7 +78,9 @@ export default function DirectCarrierEmail({ ccEmail }) {
         to_email: toEmail,
         subject,
         body,
-        cc: ccEmail ? [ccEmail] : undefined,
+        branded: true,
+        cc: ccInput ? ccInput.split(",").map(s => s.trim()).filter(Boolean) : undefined,
+        bcc: bccInput ? bccInput.split(",").map(s => s.trim()).filter(Boolean) : undefined,
       });
       setResult({ success: true, message: res.data?.message || "Email sent to carrier" });
     } catch (err) {
@@ -147,15 +151,37 @@ export default function DirectCarrierEmail({ ccEmail }) {
 
       {/* Email fields */}
       <div className="space-y-3">
-        <div>
-          <label className="text-xs text-slate-500 mb-1 block">To (carrier email)</label>
-          <input
-            type="email"
-            value={toEmail}
-            onChange={(e) => setToEmail(e.target.value)}
-            placeholder="carrier@example.com"
-            className={inputCls}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">To (carrier email)</label>
+            <input
+              type="email"
+              value={toEmail}
+              onChange={(e) => setToEmail(e.target.value)}
+              placeholder="carrier@example.com"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">CC (comma-separated)</label>
+            <input
+              type="text"
+              value={ccInput}
+              onChange={(e) => setCcInput(e.target.value)}
+              placeholder={ccEmail || "cc@example.com"}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-slate-500 mb-1 block">BCC (comma-separated)</label>
+            <input
+              type="text"
+              value={bccInput}
+              onChange={(e) => setBccInput(e.target.value)}
+              placeholder="bcc@example.com"
+              className={inputCls}
+            />
+          </div>
         </div>
         <div>
           <label className="text-xs text-slate-500 mb-1 block">Subject</label>
@@ -175,9 +201,6 @@ export default function DirectCarrierEmail({ ccEmail }) {
             className={`${inputCls} resize-y font-mono text-xs`}
           />
         </div>
-        {ccEmail && (
-          <p className="text-xs text-slate-400">CC: {ccEmail}</p>
-        )}
       </div>
 
       <div className="flex items-center gap-3 mt-4">
