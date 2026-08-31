@@ -5,6 +5,7 @@ import {
   RefreshCw, Truck, TrendingUp, Target, Play, Eye, Power, FileText, Save
 } from "lucide-react";
 import { listAllCarriers } from "@/lib/paginatedList";
+import DirectCarrierEmail from "@/components/email/DirectCarrierEmail";
 
 const FUNNEL_OPTIONS = [
   { id: "seq_1", name: "Self-Dispatch Time Reclaim" },
@@ -375,6 +376,9 @@ export default function EmailTesting() {
           )}
         </div>
       </div>
+
+      {/* Direct Carrier Email */}
+      <DirectCarrierEmail ccEmail={ccEmail} />
 
       {/* Engine status banner */}
       <div className={`rounded-lg border p-3 mb-4 flex items-center gap-2 ${
