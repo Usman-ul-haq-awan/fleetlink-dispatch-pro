@@ -2,12 +2,15 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Phone, PhoneCall, AlertCircle } from "lucide-react";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 export default function CallingQueue() {
   const [calls, setCalls] = useState([]);
   const [carriers, setCarriers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [logOutcome, setLogOutcome] = useState(null);
+  const { isVisitor } = useEntity();
 
   const load = async () => {
     setLoading(true);
@@ -20,7 +23,7 @@ export default function CallingQueue() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (!isVisitor) load(); }, [isVisitor]);
 
   const logCall = async (carrier, outcome) => {
     try {
@@ -74,6 +77,8 @@ export default function CallingQueue() {
   };
 
   const OUTCOMES = ["No Answer", "Voicemail", "Interested", "Very Interested", "Callback Requested", "Not Interested", "Already Has Dispatcher", "Wrong Number", "Do Not Contact", "Human Handoff"];
+
+  if (isVisitor) return <VisitorEmptyState title="Calling Queue" message="The calling queue is hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">

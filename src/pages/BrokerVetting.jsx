@@ -4,6 +4,8 @@ import { Search, Plus, Eye, Pencil, Trash2, Loader2, Briefcase, X, ShieldCheck, 
 import BrokerForm from "@/components/brokers/BrokerForm";
 import BrokerScoreCard from "@/components/brokers/BrokerScoreCard";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 const AUTHORITY_COLORS = {
   "Active": "bg-green-100 text-green-700",
@@ -36,6 +38,7 @@ export default function BrokerVetting() {
   const [researching, setResearching] = useState(null);
   const [researchingAll, setResearchingAll] = useState(false);
   const [researchMsg, setResearchMsg] = useState("");
+  const { isVisitor } = useEntity();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,7 +63,7 @@ export default function BrokerVetting() {
     }
   }, [search, ratingFilter, statusFilter]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!isVisitor) load(); }, [load, isVisitor]);
 
   const openAdd = () => { setEditing(null); setShowForm(true); };
   const openEdit = (b) => { setEditing(b); setShowForm(true); setDetail(null); };
@@ -176,6 +179,8 @@ export default function BrokerVetting() {
     load();
     setResearchingAll(false);
   };
+
+  if (isVisitor) return <VisitorEmptyState title="Broker Vetting" message="Broker records are hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

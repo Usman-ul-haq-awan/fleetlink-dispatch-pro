@@ -5,6 +5,8 @@ import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar,
 import * as XLSX from "xlsx";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 // Classifies a carrier's operation type from the stored carrier_segment /
 // operating_status fields. FMCSA uses "A" = Interstate, "B" = Intrastate,
@@ -81,6 +83,7 @@ export default function CarrierDatabase() {
   }, []);
 
   const isAdmin = currentUser?.role === "admin";
+  const { isVisitor } = useEntity();
 
   const saveComment = async (carrier, text) => {
     setSavingComment(carrier.id);
@@ -207,7 +210,7 @@ export default function CarrierDatabase() {
     }
   }, [search, mcSearch, phoneSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, agentFilter, currentUser, isAdmin]);
 
-  useEffect(() => { if (currentUser) loadCarriers(true); }, [loadCarriers, currentUser]);
+  useEffect(() => { if (currentUser && !isVisitor) loadCarriers(true); }, [loadCarriers, currentUser, isVisitor]);
 
   const handleResearch = async (carrierId, usdot) => {
     setResearching(true);
@@ -262,6 +265,8 @@ export default function CarrierDatabase() {
   };
 
   const states = [...new Set(carriers.map(c => c.state).filter(Boolean))].sort();
+
+  if (isVisitor) return <VisitorEmptyState title="Carrier Database" message="Carrier records are hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

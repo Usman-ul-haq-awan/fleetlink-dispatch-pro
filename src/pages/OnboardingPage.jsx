@@ -4,6 +4,8 @@ import { base44 } from "@/api/base44Client";
 import { ClipboardCheck, ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
 import OnboardingDetail from "@/components/onboarding/OnboardingDetail";
 import StartOnboardingModal from "@/components/onboarding/StartOnboardingModal";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 const STATUSES = [
   "New",
@@ -31,6 +33,7 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [showStartModal, setShowStartModal] = useState(false);
+  const { isVisitor } = useEntity();
 
   const load = async () => {
     setLoading(true);
@@ -55,8 +58,8 @@ export default function OnboardingPage() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!isVisitor) load();
+  }, [isVisitor]);
 
   const updateStatus = async (record, status) => {
     await base44.entities.Onboarding.update(record.id, {
@@ -87,6 +90,8 @@ export default function OnboardingPage() {
   };
 
   const totalDocs = (record) => (record.uses_factoring ? 5 : 5);
+
+  if (isVisitor) return <VisitorEmptyState title="Onboarding" message="Onboarding records are hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">

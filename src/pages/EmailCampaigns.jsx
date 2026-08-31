@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Mail, Plus, Send, Eye, Loader2, Pause, Play } from "lucide-react";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 export default function EmailCampaigns() {
   const [campaigns, setCampaigns] = useState([]);
@@ -11,6 +13,7 @@ export default function EmailCampaigns() {
   const [previewEmail, setPreviewEmail] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
+  const { isVisitor } = useEntity();
 
   const load = async () => {
     setLoading(true);
@@ -21,7 +24,7 @@ export default function EmailCampaigns() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (!isVisitor) load(); }, [isVisitor]);
 
   const createCampaign = async () => {
     try {
@@ -74,6 +77,8 @@ export default function EmailCampaigns() {
       setSending(false);
     }
   };
+
+  if (isVisitor) return <VisitorEmptyState title="Email Campaigns" message="Campaigns are hidden for visitors and cannot be run." />;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">

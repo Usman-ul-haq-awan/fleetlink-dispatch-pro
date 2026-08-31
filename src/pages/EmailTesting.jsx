@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { listAllCarriers } from "@/lib/paginatedList";
 import DirectCarrierEmail from "@/components/email/DirectCarrierEmail";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 const FUNNEL_OPTIONS = [
   { id: "seq_1", name: "Self-Dispatch Time Reclaim" },
@@ -47,6 +49,7 @@ export default function EmailTesting() {
   const [sendingTest, setSendingTest] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [health, setHealth] = useState({ sample: 0, sent: 0, bounced: 0, replied: 0, failed: 0, bounceRate: 0, replyRate: 0, failRate: 0, rating: "—", ratingColor: "slate" });
+  const { isVisitor } = useEntity();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,7 +142,7 @@ export default function EmailTesting() {
     }
   }, [filter]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!isVisitor) load(); }, [load, isVisitor]);
 
   // Load engine enabled state
   useEffect(() => {
@@ -281,6 +284,8 @@ export default function EmailTesting() {
     teal: "bg-teal-50 text-teal-700 border-teal-200",
     red: "bg-red-50 text-red-700 border-red-200",
   };
+
+  if (isVisitor) return <VisitorEmptyState title="Email Engine" message="The email engine is hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

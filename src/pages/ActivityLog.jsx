@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Activity, Filter } from "lucide-react";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 export default function ActivityLog() {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
+  const { isVisitor } = useEntity();
 
   const load = async () => {
     setLoading(true);
@@ -16,9 +19,11 @@ export default function ActivityLog() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (!isVisitor) load(); }, [isVisitor]);
 
   const filtered = statusFilter ? activities.filter(a => a.status === statusFilter) : activities;
+
+  if (isVisitor) return <VisitorEmptyState title="Activity / Audit Log" message="Activity records are hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">

@@ -8,6 +8,8 @@ import { subscribe as subscribeDiscovery, startDiscovery as startRunnerDiscovery
 import { subscribe as subscribeAudit, startAudit as startRunnerAudit, stopAudit as stopRunnerAudit } from "@/lib/auditRunner";
 import { subscribe as subscribeAutoResearch, startAutoResearch as startRunnerAutoResearch, stopAutoResearch as stopRunnerAutoResearch } from "@/lib/autoResearchRunner";
 import { listAllCarriers } from "@/lib/paginatedList";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 const QUEUE_STATUSES = ["Imported", "Queued", "Researching", "Failed", "Needs Review"];
 
@@ -26,6 +28,7 @@ export default function CarrierResearch() {
   const [audit, setAudit] = useState({ running: false, progress: { removed: 0, kept: 0, workerChecks: 0, storedChecks: 0, remaining: 0, current: "" }, removedCarriers: [] });
   const [autoResearch, setAutoResearch] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" }, currentCarrier: null });
   const [serverResearch, setServerResearch] = useState({ enabled: false, target: 200, startMc: null, foundCount: 0, lastResult: null, saving: false });
+  const { isVisitor } = useEntity();
 
   useEffect(() => {
     const unsub = subscribeDiscovery((snap) => {
@@ -122,7 +125,7 @@ export default function CarrierResearch() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!isVisitor) load(); }, [load, isVisitor]);
 
   // Refresh the carrier list when auto-research finishes
   const prevAutoRunning = useRef(false);
@@ -269,6 +272,8 @@ export default function CarrierResearch() {
 
   const runAudit = () => startRunnerAudit();
   const stopAudit = () => stopRunnerAudit();
+
+  if (isVisitor) return <VisitorEmptyState title="Carrier Research" message="The research queue is hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
