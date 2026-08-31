@@ -278,9 +278,9 @@ export default function StaffList({
         Approve staff to generate their 4-digit login code (shown next to their name — share it with them). Staff must enter this code on every login. Phone and ID document are editable anytime.
       </p>
 
-      <div className="border border-slate-200 rounded-lg overflow-x-auto">
+      <div className="border border-slate-200 rounded-lg overflow-auto max-h-[320px]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Name & Login Code</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Email</th>
