@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { sendEmail } from "../../shared/emailSender.ts";
+import { wrapBodyAsHtml } from "../../shared/emailHtmlWrapper.ts";
 
 // Test email protocol — sends to ANY address (your own inbox) to verify the
 // email pipeline works. Does NOT require a carrier and does NOT change any
@@ -12,7 +13,7 @@ export default async function sendTestEmail(req: Request): Promise<Response> {
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { to_email, subject, body: emailBody, carrier_id, cc, bcc } = body;
+    const { to_email, subject, body: emailBody, carrier_id, cc, bcc, branded } = body;
 
     if (!to_email) return Response.json({ error: "to_email is required" }, { status: 400 });
     if (!subject) return Response.json({ error: "subject is required" }, { status: 400 });
