@@ -64,6 +64,12 @@ export default function CertificatePaywall({ quizResultId, module, title, studen
     const w = window.open("", "_blank", "width=800,height=600");
     if (!w) { alert("Please allow popups to print the certificate."); return; }
     const dateStr = new Date(payment?.verified_at || Date.now()).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const companyName = settings.company_name || "Tycoon Dispatch Academy";
+    const companyLogo = settings.company_logo_url || "";
+    const companyTagline = settings.company_website || "Dispatching Academy";
+    const logoHtml = companyLogo
+      ? `<img src="${companyLogo}" alt="logo" style="max-height:60px;max-width:180px;object-fit:contain;margin-bottom:14px;" />`
+      : "";
     w.document.write(`<!DOCTYPE html><html><head><title>Certificate - ${studentName}</title>
     <style>*{margin:0;padding:0;box-sizing:border-box;font-family:Georgia,serif;}
     body{padding:40px;background:#f4f6fb;}
@@ -80,14 +86,15 @@ export default function CertificatePaywall({ quizResultId, module, title, studen
     @media print{body{padding:0;background:#fff;}.cert{border:4px double #0a2a6e;}}
     </style></head><body>
     <div class="cert">
+      ${logoHtml}
       <div class="badge">CERTIFICATE OF COMPLETION</div>
-      <h1>Tycoon Dispatch Academy</h1>
+      <h1>${companyName}</h1>
       <div class="sub">This certifies that</div>
       <div class="name">${studentName}</div>
       <div class="sub">has successfully completed</div>
       <div class="module"><strong>Module ${module}: ${title}</strong></div>
       <div class="date">${dateStr}</div>
-      <div class="brand">Tycoon Logistics · Dispatching Academy</div>
+      <div class="brand">${companyName} · ${companyTagline}</div>
       <div class="paid">✓ Payment Verified</div>
     </div>
     <script>window.onload=function(){window.print();}</script>
@@ -119,7 +126,7 @@ export default function CertificatePaywall({ quizResultId, module, title, studen
           <p className="text-xs text-slate-500 mt-2 text-center">
             Issued: {new Date(payment.verified_at || Date.now()).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
           </p>
-          <p className="text-[10px] text-slate-400 mt-3 text-center">Tycoon Dispatch Academy · Tycoon Logistics</p>
+          <p className="text-[10px] text-slate-400 mt-3 text-center">{settings.company_name || "Tycoon Dispatch Academy"} · {settings.company_website || "Dispatching Academy"}</p>
         </div>
         <button onClick={printCertificate}
           className="mt-4 w-full flex items-center justify-center gap-2 bg-blue-800 hover:bg-red-600 text-white text-sm font-bold py-3 rounded-full transition-colors">

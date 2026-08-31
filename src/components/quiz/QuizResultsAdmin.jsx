@@ -16,6 +16,7 @@ export default function QuizResultsAdmin() {
   const [payments, setPayments] = useState([]);
   const [verifying, setVerifying] = useState(null);
   const [selectedResult, setSelectedResult] = useState(null);
+  const [settings, setSettings] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -24,6 +25,10 @@ export default function QuizResultsAdmin() {
       setResults(all);
       const pays = await base44.entities.CertificatePayment.list("-created_date", 500);
       setPayments(pays);
+      const sAll = await base44.entities.AppSetting.list("-setting_key", 200);
+      const sMap = {};
+      sAll.forEach((s) => { sMap[s.setting_key] = s.setting_value; });
+      setSettings(sMap);
     } catch (err) {
       console.error("Quiz results load error:", err);
     } finally {
@@ -62,6 +67,12 @@ export default function QuizResultsAdmin() {
     const w = window.open("", "_blank", "width=800,height=600");
     if (!w) { alert("Please allow popups to print the certificate."); return; }
     const dateStr = new Date(r.created_date || Date.now()).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const companyName = settings.company_name || "Tycoon Dispatch Academy";
+    const companyLogo = settings.company_logo_url || "";
+    const companyTagline = settings.company_website || "Dispatching Academy";
+    const logoHtml = companyLogo
+      ? `<img src="${companyLogo}" alt="logo" style="max-height:60px;max-width:180px;object-fit:contain;margin-bottom:14px;" />`
+      : "";
     w.document.write(`<!DOCTYPE html><html><head><title>Certificate - ${r.student_name}</title>
     <style>*{margin:0;padding:0;box-sizing:border-box;font-family:Georgia,serif;}
     body{padding:40px;background:#f4f6fb;}
@@ -77,15 +88,16 @@ export default function QuizResultsAdmin() {
     @media print{body{padding:0;background:#fff;}.cert{border:4px double #0a2a6e;}}
     </style></head><body>
     <div class="cert">
+      ${logoHtml}
       <div class="badge">CERTIFICATE OF COMPLETION</div>
-      <h1>Tycoon Dispatch Academy</h1>
+      <h1>${companyName}</h1>
       <div class="sub">This certifies that</div>
       <div class="name">${r.student_name}</div>
       <div class="sub">has successfully completed</div>
       <div class="module"><strong>Module ${r.module_number}: ${r.module_title}</strong></div>
       <div class="score">Score: ${r.percentage}% (${r.score}/${r.total})</div>
       <div class="date">${dateStr}</div>
-      <div class="brand">Tycoon Logistics · Dispatching Academy</div>
+      <div class="brand">${companyName} · ${companyTagline}</div>
     </div>
     <script>window.onload=function(){window.print();}</script>
     </body></html>`);
