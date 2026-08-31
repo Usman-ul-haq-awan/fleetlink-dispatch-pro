@@ -6,7 +6,7 @@ import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
 import AllocationSection from "@/components/AllocationSection";
 import ToolsPanel from "@/components/tools/ToolsPanel";
-import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
+import { listAllCarriers, listCarriersForUser, listAllEmailLogs } from "@/lib/paginatedList";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 
 export default function Dashboard() {
@@ -119,7 +119,7 @@ export default function Dashboard() {
       let carriers = (!isAdmin && user)
         ? await listCarriersForUser(user.id, "-updated_date")
         : await listAllCarriers("-updated_date");
-      const emails = await base44.entities.EmailLog.list("-sent_at", 200);
+      const emails = await listAllEmailLogs("-sent_at");
       const calls = await base44.entities.CallLog.list("-call_date", 200);
       const handoffs = await base44.entities.Handoff.list("-created_at", 100);
       const onboardingRecords = await base44.entities.Onboarding.list("-updated_at", 200);

@@ -31,6 +31,21 @@ export async function listCarriersForUser(userId, sort = "-updated_date", max = 
   return all;
 }
 
+// Paginates through all EmailLog records using the SDK's skip parameter.
+export async function listAllEmailLogs(sort = "-sent_at", max = 500000) {
+  const limit = 5000;
+  let skip = 0;
+  let all = [];
+  while (all.length < max) {
+    const batch = await base44.entities.EmailLog.list(sort, limit, skip);
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < limit) break;
+    skip += limit;
+  }
+  return all;
+}
+
 // Counts all carriers by paginating with skip. Returns the true total.
 export async function countAllCarriers() {
   const limit = 5000;
