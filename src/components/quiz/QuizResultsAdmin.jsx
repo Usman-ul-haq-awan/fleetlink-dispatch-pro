@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Loader2, Mail, Printer, Search, Award, XCircle, RefreshCw, CheckCircle, Clock } from "lucide-react";
+import QuizResultDetailModal from "@/components/quiz/QuizResultDetailModal";
 
 const inputCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -14,6 +15,7 @@ export default function QuizResultsAdmin() {
   const [emailStatus, setEmailStatus] = useState({});
   const [payments, setPayments] = useState([]);
   const [verifying, setVerifying] = useState(null);
+  const [selectedResult, setSelectedResult] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,7 +176,11 @@ export default function QuizResultsAdmin() {
             <tbody className="divide-y divide-slate-100">
               {filtered.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-900">{r.student_name}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    <button onClick={() => setSelectedResult(r)} className="text-blue-700 hover:text-blue-900 hover:underline text-left" title="View details & issue certificate">
+                      {r.student_name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{r.student_email || "—"}</td>
                   <td className="px-4 py-3 text-slate-600 text-xs">M{r.module_number}: {r.module_title}</td>
                   <td className="px-4 py-3 text-slate-700 font-medium">{r.score}/{r.total} <span className="text-slate-400">({r.percentage}%)</span></td>
@@ -234,6 +240,19 @@ export default function QuizResultsAdmin() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {selectedResult && (
+        <QuizResultDetailModal
+          result={selectedResult}
+          payment={paymentByResult[selectedResult.id]}
+          onClose={() => setSelectedResult(null)}
+          onPrint={printCertificate}
+          onEmail={sendEmail}
+          onVerifyPayment={verifyPayment}
+          emailing={emailing}
+          verifying={verifying}
+        />
       )}
     </div>
   );
