@@ -52,6 +52,7 @@ export default function Layout() {
   }, [location.pathname]);
 
   const handleLogout = async () => {
+    try { localStorage.removeItem("fleetlink_session_authenticated"); } catch {}
     await base44.auth.logout();
   };
 

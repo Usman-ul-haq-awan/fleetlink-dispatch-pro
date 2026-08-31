@@ -10,24 +10,10 @@ const AuthContext = createContext();
 // empty sessionStorage and forces a full email/password re-login (losing the
 // destination URL). To still log users out when the browser closes, we count
 // open tabs and clear the flag only when the last tab unloads.
+// Session persists in localStorage until the user explicitly signs out.
+// Refreshing a page (or reopening the browser) must NOT force a re-login or
+// re-prompt for the PIN — only Sign Out clears this flag.
 const SESSION_KEY = 'fleetlink_session_authenticated';
-const POST_LOGIN_KEY = 'fleetlink_post_login';
-const TAB_COUNT_KEY = 'fleetlink_tab_count';
-
-try {
-  const n = parseInt(localStorage.getItem(TAB_COUNT_KEY) || '0', 10) || 0;
-  localStorage.setItem(TAB_COUNT_KEY, String(n + 1));
-  window.addEventListener('beforeunload', () => {
-    const m = parseInt(localStorage.getItem(TAB_COUNT_KEY) || '0', 10) || 0;
-    const next = Math.max(0, m - 1);
-    if (next === 0) {
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.removeItem(TAB_COUNT_KEY);
-    } else {
-      localStorage.setItem(TAB_COUNT_KEY, String(next));
-    }
-  });
-} catch {}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -119,27 +105,6 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(true);
       const currentUser = await base44.auth.me();
 
-      // Session management: enforce browser-close logout. The auth token
-      // persists in localStorage; a session flag also lives in localStorage so
-      // it is shared across tabs (opening a carrier in a new tab must NOT
-      // trigger a full re-login). The flag is cleared when the last tab
-      // closes (see the beforeunload handler above), so a fresh browser
-      // launch still requires re-authentication.
-      const sessionActive = localStorage.getItem(SESSION_KEY) === 'true';
-      const postLogin = sessionStorage.getItem(POST_LOGIN_KEY) === 'true';
-      if (postLogin) {
-        sessionStorage.removeItem(POST_LOGIN_KEY);
-      } else if (!sessionActive) {
-        // Browser was closed/reopened — clear the persisted token and require login.
-        try { localStorage.removeItem('base44_access_token'); } catch {}
-        try { localStorage.removeItem('token'); } catch {}
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsLoadingAuth(false);
-        setAuthChecked(true);
-        return;
-      }
-
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
@@ -163,6 +128,7 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
     
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
