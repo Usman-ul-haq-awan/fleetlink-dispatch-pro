@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Clock, CheckCircle, XCircle, Award, RotateCcw, ChevronRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { fetchQuestionBank, submitQuizResult } from "@/data/quizModules";
+import CertificatePaywall from "@/components/quiz/CertificatePaywall";
 
 const QUESTION_COUNT = 20;
 const TIME_PER_QUESTION = 30;
@@ -293,14 +294,14 @@ export default function QuizRunner({ module, title, onExit }) {
                   <p className="text-xs text-slate-500">Score</p>
                 </div>
               </div>
-              <div className="border-2 border-blue-800 rounded-lg p-5 bg-gradient-to-br from-blue-50 to-white">
-                <p className="text-xs text-slate-500 uppercase tracking-wide font-bold mb-1">Certificate of Completion</p>
-                <p className="text-lg font-bold text-blue-800">{student.name}</p>
-                <p className="text-xs text-slate-600 mt-1">has successfully completed</p>
-                <p className="text-sm font-semibold text-slate-800 mt-0.5">Module {module}: {title}</p>
-                <p className="text-xs text-slate-500 mt-2">Score: {result.pct}% · {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
-                <p className="text-[10px] text-slate-400 mt-3">Tycoon Dispatch Academy · Tycoon Logistics</p>
-              </div>
+              {savedResultId ? (
+                <CertificatePaywall quizResultId={savedResultId} module={module} title={title} studentName={student.name} />
+              ) : (
+                <div className="border-2 border-slate-200 rounded-lg p-5 bg-slate-50 text-center">
+                  <Loader2 className="w-6 h-6 text-slate-400 animate-spin mx-auto" />
+                  <p className="text-xs text-slate-500 mt-2">Preparing your certificate…</p>
+                </div>
+              )}
               <div className="text-xs text-slate-500 mb-4 flex items-center justify-center gap-1.5">
                 {savingResult ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving your result…</>
                   : emailSent ? <><CheckCircle className="w-3.5 h-3.5 text-green-600" /> Result saved & emailed to {student.email}</>

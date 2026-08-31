@@ -62,6 +62,22 @@ const SETTING_GROUPS = [
     ],
   },
   {
+    category: "payment",
+    label: "Certificate Payment Gateway (JazzCash / Easypaisa)",
+    settings: [
+      { key: "certificate_fee", label: "Certificate Fee (amount)", type: "string" },
+      { key: "certificate_fee_currency", label: "Certificate Fee Currency", type: "string" },
+      { key: "jazzcash_account_number", label: "JazzCash Account Number (mobile)", type: "string" },
+      { key: "jazzcash_account_title", label: "JazzCash Account Title (name)", type: "string" },
+      { key: "easypaisa_account_number", label: "Easypaisa Account Number (mobile)", type: "string" },
+      { key: "easypaisa_account_title", label: "Easypaisa Account Title (name)", type: "string" },
+      { key: "jazzcash_merchant_id", label: "JazzCash Merchant ID (for API — later)", type: "string" },
+      { key: "jazzcash_secure_hash", label: "JazzCash Secure Hash (for API — later)", type: "password" },
+      { key: "easypaisa_merchant_id", label: "Easypaisa Merchant ID (for API — later)", type: "string" },
+      { key: "easypaisa_api_key", label: "Easypaisa API Key (for API — later)", type: "password" },
+    ],
+  },
+  {
     category: "smtp",
     label: "SMTP Email Server (Outgoing)",
     settings: [

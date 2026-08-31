@@ -1,0 +1,107 @@
+{
+  "name": "CertificatePayment",
+  "type": "object",
+  "properties": {
+    "quiz_result_id": {
+      "type": "string",
+      "description": "Linked QuizResult record this payment unlocks"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "User ID of the student who paid"
+    },
+    "student_name": {
+      "type": "string"
+    },
+    "student_email": {
+      "type": "string"
+    },
+    "module_number": {
+      "type": "number"
+    },
+    "module_title": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "string",
+      "description": "Fee amount charged (e.g. 5)"
+    },
+    "currency": {
+      "type": "string",
+      "description": "Fee currency code (e.g. USD)"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "jazzcash",
+        "easypaisa"
+      ],
+      "description": "Which payment provider the student used"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_verification",
+        "paid",
+        "rejected"
+      ],
+      "default": "pending_verification"
+    },
+    "transaction_ref": {
+      "type": "string",
+      "description": "Transaction reference / TID entered by the student after sending money"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verified_by": {
+      "type": "string",
+      "description": "Admin user ID who verified or rejected the payment"
+    },
+    "verified_by_name": {
+      "type": "string"
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Admin notes (e.g. rejection reason)"
+    }
+  },
+  "required": [
+    "quiz_result_id",
+    "provider",
+    "status",
+    "transaction_ref"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

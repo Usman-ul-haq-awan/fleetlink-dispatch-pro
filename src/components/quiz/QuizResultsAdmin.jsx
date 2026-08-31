@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
-import { Loader2, Mail, Printer, Search, Award, XCircle, RefreshCw, CheckCircle } from "lucide-react";
+import { Loader2, Mail, Printer, Search, Award, XCircle, RefreshCw, CheckCircle, Clock } from "lucide-react";
 
 const inputCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
 
@@ -12,12 +12,16 @@ export default function QuizResultsAdmin() {
   const [passFilter, setPassFilter] = useState("");
   const [emailing, setEmailing] = useState(null);
   const [emailStatus, setEmailStatus] = useState({});
+  const [payments, setPayments] = useState([]);
+  const [verifying, setVerifying] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const all = await base44.entities.QuizResult.list("-created_date", 500);
       setResults(all);
+      const pays = await base44.entities.CertificatePayment.list("-created_date", 500);
+      setPayments(pays);
     } catch (err) {
       console.error("Quiz results load error:", err);
     } finally {
@@ -86,6 +90,26 @@ export default function QuizResultsAdmin() {
     w.document.close();
   };
 
+  const paymentByResult = {};
+  payments.forEach((p) => {
+    const existing = paymentByResult[p.quiz_result_id];
+    if (!existing || p.status === "paid") {
+      paymentByResult[p.quiz_result_id] = p;
+    }
+  });
+
+  const verifyPayment = async (paymentId, action) => {
+    setVerifying(paymentId + action);
+    try {
+      await base44.functions.invoke("verifyCertificatePayment", { payment_id: paymentId, action });
+      load();
+    } catch (err) {
+      alert("Verification failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setVerifying(null);
+    }
+  };
+
   const passedCount = results.filter((r) => r.passed).length;
   const avgScore = results.length ? Math.round(results.reduce((s, r) => s + (r.percentage || 0), 0) / results.length) : 0;
 
@@ -142,7 +166,7 @@ export default function QuizResultsAdmin() {
           <table className="min-w-full w-max text-sm">
             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
               <tr>
-                {["Student", "Email", "Module", "Score", "Result", "Date", "Email", "Actions"].map((h) => (
+                {["Student", "Email", "Module", "Score", "Result", "Date", "Payment", "Email", "Actions"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -163,6 +187,16 @@ export default function QuizResultsAdmin() {
                   </td>
                   <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{r.created_date ? new Date(r.created_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
                   <td className="px-4 py-3">
+                    {(() => {
+                      const p = paymentByResult[r.id];
+                      if (!p) return <span className="text-xs text-slate-400">Not paid</span>;
+                      if (p.status === "paid") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700"><CheckCircle className="w-3 h-3" /> Paid</span>;
+                      if (p.status === "pending_verification") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="w-3 h-3" /> Pending</span>;
+                      if (p.status === "rejected") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"><XCircle className="w-3 h-3" /> Rejected</span>;
+                      return <span className="text-xs text-slate-400">—</span>;
+                    })()}
+                  </td>
+                  <td className="px-4 py-3">
                     {r.email_sent ? (
                       <span className="text-xs text-green-600 font-medium">✓ Sent</span>
                     ) : emailStatus[r.id] === "failed" ? (
@@ -173,14 +207,26 @@ export default function QuizResultsAdmin() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => printCertificate(r)} disabled={!r.passed}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-40" title={r.passed ? "Print certificate" : "Only passed attempts get a certificate"}>
+                      <button onClick={() => printCertificate(r)} disabled={!r.passed || paymentByResult[r.id]?.status !== "paid"}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md disabled:opacity-40" title={!r.passed ? "Only passed attempts get a certificate" : paymentByResult[r.id]?.status !== "paid" ? "Pay to unlock certificate" : "Print certificate"}>
                         <Printer className="w-3.5 h-3.5" /> Print
                       </button>
                       <button onClick={() => sendEmail(r)} disabled={emailing === r.id || !r.student_email}
                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50" title="Email result to student">
                         {emailing === r.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />} Email
                       </button>
+                      {paymentByResult[r.id]?.status === "pending_verification" && (
+                        <>
+                          <button onClick={() => verifyPayment(paymentByResult[r.id].id, "verify")} disabled={verifying === paymentByResult[r.id].id + "verify"}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50">
+                            <CheckCircle className="w-3.5 h-3.5" /> Verify
+                          </button>
+                          <button onClick={() => verifyPayment(paymentByResult[r.id].id, "reject")} disabled={verifying === paymentByResult[r.id].id + "reject"}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50">
+                            <XCircle className="w-3.5 h-3.5" /> Reject
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
