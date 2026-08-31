@@ -5,6 +5,30 @@ import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
 const AuthContext = createContext();
 
+// Session flag lives in localStorage so it is shared across tabs of the same
+// browser session. Without this, opening any link in a new tab starts with an
+// empty sessionStorage and forces a full email/password re-login (losing the
+// destination URL). To still log users out when the browser closes, we count
+// open tabs and clear the flag only when the last tab unloads.
+const SESSION_KEY = 'fleetlink_session_authenticated';
+const POST_LOGIN_KEY = 'fleetlink_post_login';
+const TAB_COUNT_KEY = 'fleetlink_tab_count';
+
+try {
+  const n = parseInt(localStorage.getItem(TAB_COUNT_KEY) || '0', 10) || 0;
+  localStorage.setItem(TAB_COUNT_KEY, String(n + 1));
+  window.addEventListener('beforeunload', () => {
+    const m = parseInt(localStorage.getItem(TAB_COUNT_KEY) || '0', 10) || 0;
+    const next = Math.max(0, m - 1);
+    if (next === 0) {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(TAB_COUNT_KEY);
+    } else {
+      localStorage.setItem(TAB_COUNT_KEY, String(next));
+    }
+  });
+} catch {}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -96,13 +120,12 @@ export const AuthProvider = ({ children }) => {
       const currentUser = await base44.auth.me();
 
       // Session management: enforce browser-close logout. The auth token
-      // persists in localStorage, but a session flag lives in sessionStorage
-      // (cleared when the browser/tab closes). If the token is valid but no
-      // session flag exists and this isn't a fresh login, force logout so the
-      // user must re-authenticate every time they open the app.
-      const SESSION_KEY = 'fleetlink_session_authenticated';
-      const POST_LOGIN_KEY = 'fleetlink_post_login';
-      const sessionActive = sessionStorage.getItem(SESSION_KEY) === 'true';
+      // persists in localStorage; a session flag also lives in localStorage so
+      // it is shared across tabs (opening a carrier in a new tab must NOT
+      // trigger a full re-login). The flag is cleared when the last tab
+      // closes (see the beforeunload handler above), so a fresh browser
+      // launch still requires re-authentication.
+      const sessionActive = localStorage.getItem(SESSION_KEY) === 'true';
       const postLogin = sessionStorage.getItem(POST_LOGIN_KEY) === 'true';
       if (postLogin) {
         sessionStorage.removeItem(POST_LOGIN_KEY);

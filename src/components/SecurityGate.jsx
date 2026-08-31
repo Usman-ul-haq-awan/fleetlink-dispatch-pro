@@ -20,7 +20,7 @@ export default function SecurityGate({ children }) {
       const s = res.data;
       // Admins bypass all gates.
       if (s.role === "admin") {
-        sessionStorage.setItem(SESSION_KEY, "true");
+        localStorage.setItem(SESSION_KEY, "true");
         setScreen("app");
         return;
       }
@@ -74,7 +74,7 @@ export default function SecurityGate({ children }) {
     try {
       const res = await base44.functions.invoke("staffAuthGate", { action: "verify_code", code });
       if (res.data.valid) {
-        sessionStorage.setItem(SESSION_KEY, "true");
+        localStorage.setItem(SESSION_KEY, "true");
         setScreen("app");
       } else {
         setError("Invalid code. Contact your administrator for the correct code.");
@@ -88,7 +88,7 @@ export default function SecurityGate({ children }) {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
     base44.auth.logout(window.location.origin + "/login");
   };
 
