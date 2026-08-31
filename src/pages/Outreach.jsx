@@ -8,12 +8,17 @@ import { listAllCarriers } from "@/lib/paginatedList";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 export default function Outreach() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab") === "sent" ? "sent" : "ready";
 
   const setTab = (t) => setSearchParams({ tab: t });
+  const { isVisitor } = useEntity();
+
+  if (isVisitor) return <VisitorEmptyState title="Outreach" message="Outreach data is hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

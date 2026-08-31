@@ -2,10 +2,13 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { UserCheck, Phone, Mail, Truck } from "lucide-react";
+import { useEntity } from "@/lib/entityContext";
+import VisitorEmptyState from "@/components/VisitorEmptyState";
 
 export default function HumanHandoff() {
   const [handoffs, setHandoffs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { isVisitor } = useEntity();
 
   const load = async () => {
     setLoading(true);
@@ -16,7 +19,7 @@ export default function HumanHandoff() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (!isVisitor) load(); }, [isVisitor]);
 
   const updateStatus = async (handoff, status) => {
     await base44.entities.Handoff.update(handoff.id, { status });
@@ -33,6 +36,8 @@ export default function HumanHandoff() {
     }
     load();
   };
+
+  if (isVisitor) return <VisitorEmptyState title="Human Handoff" message="Handoff records are hidden for visitors." />;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
