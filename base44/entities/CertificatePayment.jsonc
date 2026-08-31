@@ -34,7 +34,8 @@
       "type": "string",
       "enum": [
         "jazzcash",
-        "easypaisa"
+        "easypaisa",
+        "cash"
       ],
       "description": "Which payment provider the student used"
     },

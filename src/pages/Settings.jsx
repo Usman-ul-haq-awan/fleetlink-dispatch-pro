@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Save, Phone, UserCog, Loader2 } from "lucide-react";
 import StaffManagement from "@/components/StaffManagement";
 import CompanyLogoSection from "@/components/CompanyLogoSection";
+import CashPaymentPanel from "@/components/CashPaymentPanel";
 
 const SETTING_GROUPS = [
   {
@@ -263,6 +264,8 @@ export default function Settings() {
       </div>
 
       <CompanyLogoSection />
+
+      <CashPaymentPanel />
 
       <StaffManagement />
 
