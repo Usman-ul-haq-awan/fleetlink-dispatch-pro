@@ -232,6 +232,141 @@
         ]
       },
       "description": "Staff-assigned lead classifications (multi-select) for back-office follow-up"
+    },
+    "lead_qual_status": {
+      "type": "string",
+      "enum": [
+        "Hot Lead",
+        "Warm Lead",
+        "Qualified",
+        "Ideal",
+        "Not Qualified"
+      ],
+      "description": "Lead qualification status assigned by staff"
+    },
+    "follow_up_required": {
+      "type": "string",
+      "enum": [
+        "Required",
+        "Not Required"
+      ],
+      "description": "Whether a follow-up is required"
+    },
+    "callback_attempted": {
+      "type": "string",
+      "enum": [
+        "Yes",
+        "No"
+      ],
+      "description": "Whether the carrier attempted a callback"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "High",
+        "Not High"
+      ],
+      "description": "Lead priority"
+    },
+    "asset": {
+      "type": "string",
+      "enum": [
+        "Yes",
+        "Not"
+      ],
+      "description": "Whether the carrier is an asset"
+    },
+    "interest_level": {
+      "type": "string",
+      "enum": [
+        "High",
+        "Medium",
+        "Low",
+        "Unknown"
+      ],
+      "description": "Carrier's expressed interest level"
+    },
+    "dispatch_needed": {
+      "type": "string",
+      "enum": [
+        "Yes",
+        "No",
+        "Unknown"
+      ],
+      "description": "Whether dispatch services are needed"
+    },
+    "truck_available": {
+      "type": "string",
+      "enum": [
+        "Yes",
+        "No",
+        "Unknown"
+      ],
+      "description": "Whether a truck is currently available"
+    },
+    "lead_equipment_type": {
+      "type": "string",
+      "enum": [
+        "Dry Van",
+        "Reefer",
+        "Flatbed",
+        "Box Truck",
+        "Power Only",
+        "Other",
+        "Unknown"
+      ],
+      "description": "Lead qualification equipment type (staff-assigned)"
+    },
+    "number_of_trucks": {
+      "type": "string",
+      "enum": [
+        "1",
+        "2-5",
+        "6-10",
+        "10+"
+      ],
+      "description": "Number of trucks in the carrier's fleet"
+    },
+    "decision_maker_contacted": {
+      "type": "string",
+      "enum": [
+        "Yes",
+        "No"
+      ],
+      "description": "Whether the decision maker was contacted"
+    },
+    "decision_maker": {
+      "type": "string",
+      "enum": [
+        "Owner",
+        "Driver",
+        "Manager",
+        "Dispatcher",
+        "Other",
+        "Unknown"
+      ],
+      "description": "Who the decision maker is"
+    },
+    "tycoon_service_fit": {
+      "type": "string",
+      "enum": [
+        "High",
+        "Medium",
+        "Low",
+        "None"
+      ],
+      "description": "How well the carrier fits Tycoon's dispatch service"
+    },
+    "qualification_result": {
+      "type": "string",
+      "enum": [
+        "Ideal",
+        "Qualified",
+        "Potential",
+        "Needs Verification",
+        "Not Qualified"
+      ],
+      "description": "Final lead qualification result"
     }
   },
   "required": [

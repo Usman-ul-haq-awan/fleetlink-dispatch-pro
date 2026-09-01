@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Loader2, Target, XCircle, Clock, UserCheck, Voicemail, PhoneOff, CheckCircle, Circle, StickyNote } from "lucide-react";
+import LeadQualificationFields from "@/components/LeadQualificationFields";
 
 const STATUS_OPTIONS = [
   { value: "Not Approached", label: "Not Approached", icon: Circle, activeClass: "bg-slate-500 text-white border-slate-500", inactiveClass: "text-slate-700 border-slate-300 hover:bg-slate-100" },
@@ -144,6 +145,8 @@ export default function StaffLeadBar({ carrier, existingOnboarding, onUpdated })
         />
         {savingNote && <p className="text-[10px] text-blue-500 mt-0.5">Saving...</p>}
       </div>
+
+      <LeadQualificationFields carrier={carrier} onUpdated={onUpdated} />
     </div>
   );
 }
