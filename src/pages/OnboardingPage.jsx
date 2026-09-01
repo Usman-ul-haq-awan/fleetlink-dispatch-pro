@@ -69,7 +69,15 @@ export default function OnboardingPage() {
     const carrier = carriers[record.carrier_id];
     if (carrier) {
       const newLeadStatus = status === "Active Client" ? "Active Client" : "Onboarding";
-      await base44.entities.Carrier.update(carrier.id, { lead_status: newLeadStatus });
+      // Normalize legacy string staff_lead_status to an array so the merged
+      // record passes schema validation on update.
+      const statuses = Array.isArray(carrier.staff_lead_status)
+        ? carrier.staff_lead_status
+        : (carrier.staff_lead_status ? [carrier.staff_lead_status] : []);
+      await base44.entities.Carrier.update(carrier.id, {
+        lead_status: newLeadStatus,
+        staff_lead_status: statuses,
+      });
     }
     load();
   };
