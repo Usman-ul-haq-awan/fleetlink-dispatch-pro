@@ -72,6 +72,7 @@ export default function CarrierDatabase() {
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
   const [exportingRange, setExportingRange] = useState(false);
+  const [exportingUnassigned, setExportingUnassigned] = useState(false);
   const [researchCenter, setResearchCenter] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" } });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -312,6 +313,23 @@ export default function CarrierDatabase() {
     }
   };
 
+  // Separate full export of every carrier that has NOT been allocated to a
+  // sales agent (no assigned_date). These are excluded from the range export
+  // above, which filters by allocation date.
+  const exportUnassignedToExcel = () => {
+    const unassigned = carriers.filter((c) => !c.assigned_date);
+    if (unassigned.length === 0) {
+      alert("No unassigned carriers to export.");
+      return;
+    }
+    setExportingUnassigned(true);
+    try {
+      downloadRows(buildExportRows(unassigned), "carriers_unassigned");
+    } finally {
+      setExportingUnassigned(false);
+    }
+  };
+
   const states = [...new Set(carriers.map(c => c.state).filter(Boolean))].sort();
 
   if (isVisitor) return <VisitorEmptyState title="Carrier Database" message="Carrier records are hidden for visitors." />;
@@ -362,6 +380,12 @@ export default function CarrierDatabase() {
               className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap">
               {exportingRange ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               Export Range
+            </button>
+            <button onClick={exportUnassignedToExcel} disabled={exportingUnassigned || carriers.length === 0}
+              title="Export all carriers not yet allocated to a sales agent"
+              className="flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 whitespace-nowrap">
+              {exportingUnassigned ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              Export Unassigned
             </button>
           </div>
           <div className="flex items-center gap-2">
