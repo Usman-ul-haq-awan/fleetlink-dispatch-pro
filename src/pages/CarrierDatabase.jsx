@@ -69,6 +69,9 @@ export default function CarrierDatabase() {
   const [hasMore, setHasMore] = useState(true);
   const [researching, setResearching] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [exportingRange, setExportingRange] = useState(false);
   const [researchCenter, setResearchCenter] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" } });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -224,43 +227,73 @@ export default function CarrierDatabase() {
     }
   };
 
+  const buildExportRows = (list) => list.map(c => ({
+    "Staff Lead Status": Array.isArray(c.staff_lead_status) ? c.staff_lead_status.join(", ") : (c.staff_lead_status || ""),
+    "Staff Comment": c.staff_comment || "",
+    "Allocated On": c.assigned_date || "",
+    "Legal Name": c.legal_name || "",
+    "DBA Name": c.dba_name || "",
+    "USDOT": c.usdot_number || "",
+    "MC": c.mc_number || "",
+    "MX": c.mx_number || "",
+    "Operating Status": c.operating_status || "",
+    "State": c.state || "",
+    "City": c.city || "",
+    "Phone": c.phone || "",
+    "Email": c.email || "",
+    "Owner": c.owner_name || "",
+    "Power Units": c.power_units ?? "",
+    "Drivers": c.drivers ?? "",
+    "Equipment": c.equipment_types || "",
+    "Cargo Types": c.cargo_types || "",
+    "Safety Qualification": c.safety_qualification || "",
+    "Safety Rating": c.safety_rating || "",
+    "Lead Score": c.lead_score ?? "",
+    "Lead Status": c.lead_status || "",
+    "Last Researched": c.last_researched_at || "",
+  }));
+
+  const downloadRows = (rows, name) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Carriers");
+    XLSX.writeFile(wb, `${name}_${Date.now()}.xlsx`);
+  };
+
   const exportToExcel = () => {
     if (carriers.length === 0) return;
     setExporting(true);
     try {
-      const rows = carriers.map(c => ({
-        "Staff Lead Status": Array.isArray(c.staff_lead_status) ? c.staff_lead_status.join(", ") : (c.staff_lead_status || ""),
-        "Staff Comment": c.staff_comment || "",
-        "Allocated On": c.assigned_date || "",
-        "Legal Name": c.legal_name || "",
-        "DBA Name": c.dba_name || "",
-        "USDOT": c.usdot_number || "",
-        "MC": c.mc_number || "",
-        "MX": c.mx_number || "",
-        "Operating Status": c.operating_status || "",
-        "State": c.state || "",
-        "City": c.city || "",
-        "Phone": c.phone || "",
-        "Email": c.email || "",
-        "Owner": c.owner_name || "",
-        "Power Units": c.power_units ?? "",
-        "Drivers": c.drivers ?? "",
-        "Equipment": c.equipment_types || "",
-        "Cargo Types": c.cargo_types || "",
-        "Safety Qualification": c.safety_qualification || "",
-        "Safety Rating": c.safety_rating || "",
-        "Lead Score": c.lead_score ?? "",
-        "Lead Status": c.lead_status || "",
-        "Last Researched": c.last_researched_at || "",
-      }));
-      const ws = XLSX.utils.json_to_sheet(rows);
-      ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Carriers");
       const suffix = safetyFilter ? `_${safetyFilter.replace(/\s+/g, "_")}` : "";
-      XLSX.writeFile(wb, `carriers${suffix}_${Date.now()}.xlsx`);
+      downloadRows(buildExportRows(carriers), `carriers${suffix}`);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const exportRangeToExcel = () => {
+    if (!exportFrom && !exportTo) {
+      alert("Please select a start and/or end date.");
+      return;
+    }
+    const inRange = carriers.filter((c) => {
+      if (!c.assigned_date) return false;
+      const d = c.assigned_date.split("T")[0];
+      if (exportFrom && d < exportFrom) return false;
+      if (exportTo && d > exportTo) return false;
+      return true;
+    });
+    if (inRange.length === 0) {
+      alert("No carriers allocated in the selected date range.");
+      return;
+    }
+    setExportingRange(true);
+    try {
+      const label = `${exportFrom || "start"}_to_${exportTo || "end"}`;
+      downloadRows(buildExportRows(inRange), `carriers_${label}`);
+    } finally {
+      setExportingRange(false);
     }
   };
 
@@ -294,6 +327,28 @@ export default function CarrierDatabase() {
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Export to Excel
           </button>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={exportFrom}
+              onChange={e => setExportFrom(e.target.value)}
+              className="px-2 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              title="Export range start (allocated date)"
+            />
+            <span className="text-xs text-slate-400">to</span>
+            <input
+              type="date"
+              value={exportTo}
+              onChange={e => setExportTo(e.target.value)}
+              className="px-2 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              title="Export range end (allocated date)"
+            />
+            <button onClick={exportRangeToExcel} disabled={exportingRange || carriers.length === 0}
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap">
+              {exportingRange ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              Export Range
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
