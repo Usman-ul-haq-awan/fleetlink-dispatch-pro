@@ -173,10 +173,14 @@ export default function CarrierDatabase() {
   const loadCarriers = useCallback(async (reset = false) => {
     setLoading(true);
     try {
-      // Staff (non-admin) only fetch carriers allocated to them (server-side filter)
+      // Load with a stable, never-null sort field. Sorting server-side by
+      // assigned_date breaks skip-pagination because most carriers have a null
+      // assigned_date — that unsorted null group shifts between pages and skip
+      // jumps past them, so ~2000 records never come back. We re-sort by
+      // allocated date client-side below.
       let filtered = (currentUser && !isAdmin)
-        ? await listCarriersForUser(currentUser.id, "-assigned_date")
-        : await listAllCarriers("-assigned_date");
+        ? await listCarriersForUser(currentUser.id, "-updated_date")
+        : await listAllCarriers("-updated_date");
 
       if (search) {
         const q = search.toLowerCase();
@@ -203,6 +207,17 @@ export default function CarrierDatabase() {
       if (stateFilter) filtered = filtered.filter(c => c.state === stateFilter);
       if (operationFilter) filtered = filtered.filter(c => getOperationType(c) === operationFilter);
       if (agentFilter) filtered = filtered.filter(c => c.assigned_to_user_id === agentFilter);
+
+      // Sort by allocated date descending (nulls last) — client-side, since the
+      // server-side sort uses the stable updated_date field for complete paging.
+      filtered = [...filtered].sort((a, b) => {
+        const av = a.assigned_date || "";
+        const bv = b.assigned_date || "";
+        if (!av && !bv) return 0;
+        if (!av) return 1;
+        if (!bv) return -1;
+        return bv.localeCompare(av);
+      });
 
       setCarriers(filtered);
       setHasMore(filtered.length === PAGE_SIZE);
