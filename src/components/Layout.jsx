@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import {
   LayoutDashboard, Database, Search, ShieldCheck, ShieldAlert, Mail, Phone,
   UserCheck, ClipboardCheck, Download, Activity, Settings, LogOut,
-  Truck, Send, Menu, X, Calculator, GraduationCap
+  Truck, Send, Menu, X, Calculator, GraduationCap, Megaphone
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ChatWithUs from "@/components/ChatWithUs";
@@ -17,6 +17,7 @@ const navItems = [
   { label: "Carrier Research", path: "/research", icon: Search },
   { label: "Email Campaigns", path: "/campaigns", icon: Mail },
   { label: "Email Engine", path: "/email-testing", icon: Send },
+  { label: "Sales Email", path: "/sales-email", icon: Megaphone },
   { label: "Calling Queue", path: "/calling", icon: Phone },
   { label: "Human Handoff", path: "/handoffs", icon: UserCheck },
   { label: "Onboarding", path: "/onboarding", icon: ClipboardCheck },
@@ -57,11 +58,11 @@ export default function Layout() {
   };
 
   const isAdmin = user?.role === "admin";
-  const staffAllowedPaths = ["/", "/carriers", "/tools", "/quiz-hub"];
+  const staffAllowedPaths = ["/", "/carriers", "/tools", "/quiz-hub", "/sales-email"];
   const visibleNav = navItems.filter(item => {
     // Visitors see all features (view-only); write actions are blocked per-page.
     if (isVisitor) return item.path !== "/settings";
-    // Staff (non-admin) only see Dashboard and Carrier Database.
+    // Staff (non-admin) see Dashboard, Carrier Database, Tools, Knowledge Base, and Sales Email.
     if (!isAdmin) return staffAllowedPaths.includes(item.path);
     // Admin sees everything, gated by outreach toggle for campaigns/calling.
     return (outreachEnabled || (item.path !== "/campaigns" && item.path !== "/calling")) &&

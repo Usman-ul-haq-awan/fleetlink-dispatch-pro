@@ -13,9 +13,9 @@ const DEFAULT_CC_EMAIL = "tycoon.tours.business@gmail.com";
 
 export async function sendEmail(
   base44: any,
-  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; requireSmtp?: boolean; cc?: string[]; bcc?: string[] }
+  opts: { to: string; subject: string; body: string; html?: string; fromName?: string; fromEmail?: string; requireSmtp?: boolean; cc?: string[]; bcc?: string[]; skipDefaultCc?: boolean }
 ): Promise<{ provider: string; messageId?: string }> {
-  const { to, subject, body, html, fromName } = opts;
+  const { to, subject, body, html, fromName, fromEmail } = opts;
 
   const apiKey = secrets.get("RESEND_API_KEY");
   if (!apiKey) {
@@ -24,22 +24,24 @@ export async function sendEmail(
     );
   }
 
-  // Sender identity from AppSetting (reuses the existing Settings fields).
+  // Sender identity from AppSetting (reuses the existing Settings fields),
+  // unless an explicit override is provided (e.g. staff sales email sender).
   const settings = await base44.entities.AppSetting.filter({ setting_category: "smtp" });
   const map: Record<string, string> = {};
   settings.forEach((s: any) => { map[s.setting_key] = s.setting_value; });
 
-  const fromEmail = map.smtp_from_email || "";
+  const resolvedFromEmail = fromEmail || map.smtp_from_email || "";
   const fromNameResolved = map.smtp_from_name || fromName || "Dispatch Team";
-  if (!fromEmail) {
+  if (!resolvedFromEmail) {
     throw new Error("Sender email not configured. Set smtp_from_email in Settings → SMTP Email Server to a Resend-verified address.");
   }
-  const fromAddr = `${fromNameResolved} <${fromEmail}>`;
+  const fromAddr = `${fromNameResolved} <${resolvedFromEmail}>`;
 
   // Resolve CC: if caller provides one, use it; otherwise read from AppSetting
   // (editable on the Email Engine page), falling back to the default.
+  // skipDefaultCc lets staff sales emails use their own CC config instead.
   let ccEmails = opts.cc || [];
-  if (ccEmails.length === 0) {
+  if (ccEmails.length === 0 && !opts.skipDefaultCc) {
     const ccSetting = await base44.entities.AppSetting.filter({ setting_key: "email_cc_address" });
     const ccEmail = (ccSetting.length > 0 && ccSetting[0].setting_value)
       ? ccSetting[0].setting_value

@@ -30,6 +30,7 @@ import DispatchTools from '@/pages/DispatchTools';
 import IncomeCalculatorPage from '@/pages/IncomeCalculatorPage';
 import Tools from '@/pages/Tools';
 import QuizHub from '@/pages/QuizHub';
+import SalesEmail from '@/pages/SalesEmail';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated } = useAuth();
@@ -76,6 +77,7 @@ const AuthenticatedApp = () => {
         <Route path="/settings" element={<Settings />} />
         <Route path="/tools" element={<Tools />} />
         <Route path="/quiz-hub" element={<QuizHub />} />
+        <Route path="/sales-email" element={<SalesEmail />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

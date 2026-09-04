@@ -79,6 +79,16 @@ const SETTING_GROUPS = [
     ],
   },
   {
+    category: "staff_sales",
+    label: "Staff Sales Email (sales@tycoonlogistics.online)",
+    settings: [
+      { key: "staff_sales_enabled", label: "Enable Staff Sales Email", type: "boolean" },
+      { key: "staff_sales_from_email", label: "From Email Address (Resend-verified)", type: "string" },
+      { key: "staff_sales_from_name", label: "From Name", type: "string" },
+      { key: "staff_sales_cc", label: "Default CC (comma-separated, optional)", type: "string" },
+    ],
+  },
+  {
     category: "smtp",
     label: "SMTP Email Server (Outgoing)",
     settings: [
