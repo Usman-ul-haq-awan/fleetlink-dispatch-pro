@@ -83,6 +83,11 @@ export default async function(req: Request): Promise<Response> {
     // Determine starting MC.
     let currentMc: number;
     let maxMc = 0;
+    // Build a set of all existing MC digit sequences so discovery skips
+    // duplicates regardless of how the MC was stored ("122019" vs "MC-122019"
+    // vs "MC-116446 MC-125894"). Previously this only checked exact string
+    // match via a per-MC filter call, which missed format variants.
+    const existingMcDigits = new Set<string>();
     {
       let skip = 0;
       const pageLimit = 5000;
@@ -91,8 +96,13 @@ export default async function(req: Request): Promise<Response> {
         if (!page || page.length === 0) break;
         page.forEach((c: any) => {
           const raw = String(c.mc_number || "");
-          // Prefer an explicit "MC-123456" token; fall back to pure digits only
-          // when the value is a reasonable MC range (<= 7 digits), so garbage
+          // Add every digit sequence to the dedup set.
+          (raw.match(/\d+/g) || []).forEach((d: string) => {
+            const n = parseInt(d, 10);
+            if (!isNaN(n) && n < 2000000) existingMcDigits.add(d);
+          });
+          // Conservative maxMc: prefer explicit "MC-123456" token; fall back
+          // to pure digits only when reasonable (<= 7 digits), so garbage
           // like "88058862680226" or "FF-57191 MC-684565" can't poison the cursor.
           const mcMatch = raw.match(/MC-?\s*(\d+)/i);
           let num: number | null = null;
@@ -139,9 +149,8 @@ export default async function(req: Request): Promise<Response> {
       lastMc = currentMc;
       const mcStr = String(currentMc);
 
-      // Skip if a carrier with this MC already exists.
-      const existing = await svc.entities.Carrier.filter({ mc_number: mcStr });
-      if (existing.length > 0) {
+      // Skip if a carrier with this MC already exists (normalized digit check).
+      if (existingMcDigits.has(mcStr)) {
         attempted += 1;
         continue;
       }

@@ -71,19 +71,18 @@ export default async function(req: Request): Promise<Response> {
     // ---- Phase 1: Duplicate detection ----
     // Group carriers by USDOT and MC. Any group with >1 entry has duplicates.
     // Keep the most complete record; delete the rest.
+    // Normalize identifiers to digit strings so format differences
+    // ("122019" vs "MC-122019" vs "MC-116446 MC-125894") don't hide duplicates.
     const byUsdot = new Map<string, any[]>();
     const byMc = new Map<string, any[]>();
+    const addGroup = (map: Map<string, any[]>, key: string, carrier: any) => {
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(carrier);
+    };
     for (const c of carriers) {
-      const u = (c.usdot_number || "").trim();
-      const m = (c.mc_number || "").trim();
-      if (u) {
-        if (!byUsdot.has(u)) byUsdot.set(u, []);
-        byUsdot.get(u)!.push(c);
-      }
-      if (m) {
-        if (!byMc.has(m)) byMc.set(m, []);
-        byMc.get(m)!.push(c);
-      }
+      ((c.usdot_number || "").match(/\d+/g) || []).forEach(n => addGroup(byUsdot, n, c));
+      ((c.mc_number || "").match(/\d+/g) || []).forEach(n => addGroup(byMc, n, c));
     }
 
     const duplicateIds = new Set<string>();

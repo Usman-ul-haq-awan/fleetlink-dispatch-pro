@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, Lock } from "lucide-react";
 import { useEntity } from "@/lib/entityContext";
+import { listAllCarriers } from "@/lib/paginatedList";
 import * as XLSX from "xlsx";
 
 function parseCSV(text) {
@@ -122,20 +123,36 @@ export default function ImportExport() {
         return carrier;
       });
 
-      const existingCarriers = await base44.entities.Carrier.list("-updated_date", 500);
-      const existingUsdots = new Set(existingCarriers.map(c => c.usdot_number).filter(Boolean));
-      const existingMcs = new Set(existingCarriers.map(c => c.mc_number).filter(Boolean));
+      // Load ALL existing carriers (paginated) and build normalized identifier
+      // sets so format differences ("122019" vs "MC-122019" vs "MC-116446 MC-125894")
+      // don't cause duplicates to slip through. Previously this only checked the
+      // first 500 carriers with exact string matching, which missed thousands.
+      const existingCarriers = await listAllCarriers("-updated_date");
+      const extractNums = (s) => (s ? (s.match(/\d+/g) || []) : []);
+      const existingUsdots = new Set();
+      const existingMcs = new Set();
+      existingCarriers.forEach(c => {
+        extractNums(c.usdot_number).forEach(n => existingUsdots.add(n));
+        extractNums(c.mc_number).forEach(n => existingMcs.add(n));
+      });
 
       const newCarriers = [];
       const duplicates = [];
       const missingUsdot = [];
       const missingMc = [];
+      const batchUsdots = new Set();
+      const batchMcs = new Set();
 
       for (const c of carriers) {
-        if (c.usdot_number && existingUsdots.has(c.usdot_number)) { duplicates.push(c); continue; }
-        if (c.mc_number && existingMcs.has(c.mc_number)) { duplicates.push(c); continue; }
+        const usdotNums = extractNums(c.usdot_number);
+        const mcNums = extractNums(c.mc_number);
+        const isDup = usdotNums.some(n => existingUsdots.has(n) || batchUsdots.has(n))
+          || mcNums.some(n => existingMcs.has(n) || batchMcs.has(n));
+        if (isDup) { duplicates.push(c); continue; }
         if (!c.usdot_number) missingUsdot.push(c);
         if (!c.mc_number) missingMc.push(c);
+        usdotNums.forEach(n => batchUsdots.add(n));
+        mcNums.forEach(n => batchMcs.add(n));
         newCarriers.push(c);
       }
 
