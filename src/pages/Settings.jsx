@@ -185,14 +185,18 @@ export default function Settings() {
       const existingMap = {};
       all.forEach(s => { existingMap[s.setting_key] = s; });
 
-      const updates = [];
+      // Build the full list of create/update operations, then run them in
+      // small sequential batches. Firing ~40 concurrent entity writes at once
+      // overwhelms the origin and Cloudflare returns a parse error (empty/
+      // malformed response), so we throttle to 5 at a time.
+      const ops = [];
       for (const group of SETTING_GROUPS) {
         for (const setting of group.settings) {
           const value = settings[setting.key] || "";
           if (existingMap[setting.key]) {
-            updates.push(base44.entities.AppSetting.update(existingMap[setting.key].id, { setting_value: value }));
+            ops.push(base44.entities.AppSetting.update(existingMap[setting.key].id, { setting_value: value }));
           } else {
-            updates.push(base44.entities.AppSetting.create({
+            ops.push(base44.entities.AppSetting.create({
               setting_key: setting.key,
               setting_value: value,
               setting_category: group.category,
@@ -202,7 +206,10 @@ export default function Settings() {
           }
         }
       }
-      await Promise.all(updates);
+      const BATCH = 5;
+      for (let i = 0; i < ops.length; i += BATCH) {
+        await Promise.all(ops.slice(i, i + BATCH));
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
