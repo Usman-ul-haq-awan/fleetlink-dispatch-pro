@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock, ShieldCheck, RefreshCw, Loader2, Star } from "lucide-react";
@@ -9,6 +9,7 @@ import ToolsPanel from "@/components/tools/ToolsPanel";
 import { listAllCarriers, listCarriersForUser, listAllEmailLogs } from "@/lib/paginatedList";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 import { useEntity } from "@/lib/entityContext";
+import { subscribe as subscribeAudit } from "@/lib/auditRunner";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -35,6 +36,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (currentUser) loadDashboard(currentUser);
+  }, [currentUser]);
+
+  // Refresh dashboard stats when the Authorized Authority Audit removes
+  // carriers or finishes — otherwise the dashboard shows stale counts until
+  // you navigate away and back. The audit runner is a module-level singleton,
+  // so this subscription works even if the audit was started on another page.
+  const prevAuditRunning = useRef(false);
+  const prevAuditRemoved = useRef(0);
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsub = subscribeAudit((snap) => {
+      if (prevAuditRunning.current && !snap.running) loadDashboard(currentUser);
+      if (snap.running && snap.progress.removed > prevAuditRemoved.current) loadDashboard(currentUser);
+      prevAuditRunning.current = snap.running;
+      prevAuditRemoved.current = snap.progress.removed;
+    });
+    return unsub;
   }, [currentUser]);
 
   const loadFollowUp = async (user) => {

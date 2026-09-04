@@ -29,8 +29,27 @@ export default async function(req: Request): Promise<Response> {
     const workerUrl = secrets.get("WORKER_URL");
     const apiKey = secrets.get("WORKER_API_KEY");
 
-    // Load carriers (bounded to avoid rate limits; frontend calls repeatedly)
-    const carriers = await base44.entities.Carrier.list("-updated_date", 500);
+    // Duplicate detection MUST see the entire database at once — if two
+    // duplicate carriers land in different 500-record pages, a bounded load
+    // never compares them and the duplicates survive forever. So we paginate
+    // through ALL carriers for the duplicate phase. The authority phase below
+    // is still bounded per call (worker calls are rate-limited) and the
+    // frontend runner loops until remaining_unchecked hits 0.
+    const loadAllCarriers = async () => {
+      const limit = 5000;
+      let skip = 0;
+      let all: any[] = [];
+      while (true) {
+        const batch = await base44.entities.Carrier.list("-updated_date", limit, skip);
+        if (!batch || batch.length === 0) break;
+        all = all.concat(batch);
+        if (batch.length < limit) break;
+        skip += limit;
+      }
+      return all;
+    };
+
+    const carriers = await loadAllCarriers();
 
     let checkedFromStored = 0;
     let checkedFromWorker = 0;
