@@ -58,12 +58,9 @@ export default function CarrierExportPanel({ carriers }) {
     }
   };
 
-  // Export only carriers allocated within a date range (requires assigned_date).
+  // Export carriers allocated within a date range. With no dates selected,
+  // exports ALL assigned carriers (the full scraped set) — no limit.
   const exportRange = () => {
-    if (!exportFrom && !exportTo) {
-      alert("Please select a start and/or end date.");
-      return;
-    }
     const inRange = carriers.filter((c) => {
       if (!c.assigned_date) return false;
       const d = c.assigned_date.split("T")[0];
@@ -72,12 +69,14 @@ export default function CarrierExportPanel({ carriers }) {
       return true;
     });
     if (inRange.length === 0) {
-      alert("No carriers allocated in the selected date range.");
+      alert("No assigned carriers found for the selected range.");
       return;
     }
     setBusy("range");
     try {
-      const label = `${exportFrom || "start"}_to_${exportTo || "end"}`;
+      const label = exportFrom || exportTo
+        ? `${exportFrom || "start"}_to_${exportTo || "end"}`
+        : "all_assigned";
       downloadRows(buildExportRows(inRange), `carriers_${label}`);
     } finally {
       setBusy(null);
@@ -131,7 +130,7 @@ export default function CarrierExportPanel({ carriers }) {
             Export by Allocation Range
           </h2>
           <p className="text-sm text-slate-500 mb-4">
-            Only carriers allocated to an agent within the selected dates. <strong>{assignedCount.toLocaleString()}</strong> assigned carriers available.
+            Leave dates empty to export <strong>all {assignedCount.toLocaleString()} assigned carriers</strong>, or pick a range to narrow it down.
           </p>
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex flex-col">
