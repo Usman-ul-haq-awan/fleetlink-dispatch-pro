@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Save, Phone, UserCog, Loader2 } from "lucide-react";
+import { Save, Phone, UserCog, Loader2, Mail } from "lucide-react";
 import StaffManagement from "@/components/StaffManagement";
 import CompanyLogoSection from "@/components/CompanyLogoSection";
 import CashPaymentPanel from "@/components/CashPaymentPanel";
@@ -19,6 +19,24 @@ const SETTING_GROUPS = [
       { key: "corporate_caller_id", label: "Corporate Caller ID (for voice calls)", type: "string" },
       { key: "dispatch_service_description", label: "Dispatch Service Description", type: "text" },
       { key: "email_signature", label: "Email Signature", type: "text" },
+    ],
+  },
+  {
+    category: "smtp",
+    label: "SMTP Email Server (Outgoing)",
+    icon: "mail",
+    settings: [
+      { key: "smtp_host", label: "SMTP Host", type: "string" },
+      { key: "smtp_port", label: "SMTP Port", type: "number" },
+      { key: "smtp_encryption", label: "Encryption", type: "select", options: [
+        { value: "SSL", label: "SSL/TLS (port 465)" },
+        { value: "STARTTLS", label: "STARTTLS (port 587)" },
+        { value: "None", label: "None" },
+      ]},
+      { key: "smtp_username", label: "SMTP Username", type: "string" },
+      { key: "smtp_password", label: "SMTP Password", type: "password" },
+      { key: "smtp_from_email", label: "From Email Address", type: "string" },
+      { key: "smtp_from_name", label: "From Name", type: "string" },
     ],
   },
   {
@@ -86,23 +104,6 @@ const SETTING_GROUPS = [
       { key: "staff_sales_from_email", label: "From Email Address (Resend-verified)", type: "string" },
       { key: "staff_sales_from_name", label: "From Name", type: "string" },
       { key: "staff_sales_cc", label: "Default CC (comma-separated, optional)", type: "string" },
-    ],
-  },
-  {
-    category: "smtp",
-    label: "SMTP Email Server (Outgoing)",
-    settings: [
-      { key: "smtp_host", label: "SMTP Host", type: "string" },
-      { key: "smtp_port", label: "SMTP Port", type: "number" },
-      { key: "smtp_encryption", label: "Encryption", type: "select", options: [
-        { value: "SSL", label: "SSL/TLS (port 465)" },
-        { value: "STARTTLS", label: "STARTTLS (port 587)" },
-        { value: "None", label: "None" },
-      ]},
-      { key: "smtp_username", label: "SMTP Username", type: "string" },
-      { key: "smtp_password", label: "SMTP Password", type: "password" },
-      { key: "smtp_from_email", label: "From Email Address", type: "string" },
-      { key: "smtp_from_name", label: "From Name", type: "string" },
     ],
   },
 ];
@@ -301,7 +302,10 @@ export default function Settings() {
 
       {SETTING_GROUPS.map(group => (
         <div key={group.category} className="bg-white rounded-lg border border-slate-200 p-5 mb-4">
-          <h2 className="font-semibold text-slate-900 mb-4">{group.label}</h2>
+          <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            {group.icon === "mail" && <Mail className="w-5 h-5 text-blue-600" />}
+            {group.label}
+          </h2>
           <div className="space-y-4">
             {group.settings.map(setting => (
               <div key={setting.key}>
