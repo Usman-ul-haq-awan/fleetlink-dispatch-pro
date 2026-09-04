@@ -98,12 +98,28 @@ const SETTING_GROUPS = [
   },
   {
     category: "staff_sales",
-    label: "Staff Sales Email (sales@tycoonlogistics.online)",
+    label: "Staff Sales Email (staff-only toggle)",
     settings: [
       { key: "staff_sales_enabled", label: "Enable Staff Sales Email", type: "boolean" },
-      { key: "staff_sales_from_email", label: "From Email Address (Resend-verified)", type: "string" },
-      { key: "staff_sales_from_name", label: "From Name", type: "string" },
       { key: "staff_sales_cc", label: "Default CC (comma-separated, optional)", type: "string" },
+    ],
+  },
+  {
+    category: "staff_smtp",
+    label: "Staff SMTP Email Server (Manual — staff only)",
+    icon: "mail",
+    settings: [
+      { key: "staff_smtp_host", label: "SMTP Host", type: "string" },
+      { key: "staff_smtp_port", label: "SMTP Port", type: "number" },
+      { key: "staff_smtp_encryption", label: "Encryption", type: "select", options: [
+        { value: "SSL", label: "SSL/TLS (port 465)" },
+        { value: "STARTTLS", label: "STARTTLS (port 587)" },
+        { value: "None", label: "None" },
+      ]},
+      { key: "staff_smtp_username", label: "SMTP Username", type: "string" },
+      { key: "staff_smtp_password", label: "SMTP Password", type: "password" },
+      { key: "staff_smtp_from_email", label: "From Email Address", type: "string" },
+      { key: "staff_smtp_from_name", label: "From Name", type: "string" },
     ],
   },
 ];

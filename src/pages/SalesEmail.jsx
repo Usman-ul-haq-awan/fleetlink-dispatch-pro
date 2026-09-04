@@ -43,16 +43,21 @@ export default function SalesEmail() {
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
-    // Load staff sales email configuration (set by admin).
-    base44.entities.AppSetting.filter({ setting_category: "staff_sales" })
-      .then(rows => {
-        const map = {};
-        rows.forEach(r => { map[r.setting_key] = r.setting_value; });
+    // Load staff email configuration: toggle/CC from staff_sales, sender from staff_smtp.
+    Promise.all([
+      base44.entities.AppSetting.filter({ setting_category: "staff_sales" }),
+      base44.entities.AppSetting.filter({ setting_category: "staff_smtp" }),
+    ])
+      .then(([salesRows, smtpRows]) => {
+        const sMap = {};
+        salesRows.forEach(r => { sMap[r.setting_key] = r.setting_value; });
+        const mMap = {};
+        smtpRows.forEach(r => { mMap[r.setting_key] = r.setting_value; });
         setSender({
-          from_email: map.staff_sales_from_email || "",
-          from_name: map.staff_sales_from_name || "Sales Team",
-          enabled: map.staff_sales_enabled !== "false",
-          cc: map.staff_sales_cc || "",
+          from_email: mMap.staff_smtp_from_email || "",
+          from_name: mMap.staff_smtp_from_name || "Sales Team",
+          enabled: sMap.staff_sales_enabled !== "false",
+          cc: sMap.staff_sales_cc || "",
         });
       })
       .catch(() => {});
@@ -159,7 +164,7 @@ export default function SalesEmail() {
           <p className="text-sm text-amber-800">
             {sender.enabled === false
               ? "Staff sales email is currently disabled by the admin."
-              : "Staff sales sender email is not configured yet. Ask an admin to set it in Settings → Staff Sales Email."}
+              : "Staff SMTP sender is not configured yet. Ask an admin to set it in Settings → Staff SMTP Email Server."}
           </p>
         </div>
       )}

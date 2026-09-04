@@ -1,5 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
-import { sendEmail } from "../../shared/emailSender.ts";
+import { sendStaffSmtpEmail } from "../../shared/staffSmtpSender.ts";
 import { wrapBodyAsHtml } from "../../shared/emailHtmlWrapper.ts";
 
 // Staff Sales Email — lets any staff member send a sales email to a carrier
@@ -28,12 +28,6 @@ export default async function sendStaffSalesEmail(req: Request): Promise<Respons
       return Response.json({ error: "Staff sales email is disabled by the admin." }, { status: 403 });
     }
 
-    const fromEmail = map.staff_sales_from_email || "";
-    const fromName = map.staff_sales_from_name || "Sales Team";
-    if (!fromEmail) {
-      return Response.json({ error: "Staff sales sender email not configured. Ask an admin to set it in Settings → Staff Sales Email." }, { status: 500 });
-    }
-
     // CC: explicit caller CC wins; otherwise the staff sales CC setting; else none.
     const toArr = (v: any) =>
       Array.isArray(v) ? v.map((s: string) => s.trim()).filter(Boolean)
@@ -48,17 +42,16 @@ export default async function sendStaffSalesEmail(req: Request): Promise<Respons
     const htmlBody = branded ? wrapBodyAsHtml(subject, plainBody) : undefined;
     const now = new Date().toISOString();
 
-    const sendResult = await sendEmail(base44, {
+    // Send via the staff-only SMTP server (manual config, independent of the
+    // admin email worker / Resend). Sender identity comes from the staff_smtp
+    // settings group.
+    const sendResult = await sendStaffSmtpEmail(base44, {
       to: to_email,
       subject,
       body: plainBody,
       html: htmlBody,
-      fromName,
-      fromEmail,
-      requireSmtp: true,
       cc: ccEmails,
       bcc: toArr(bcc),
-      skipDefaultCc: true,
     });
 
     // Log the staff sales send.
