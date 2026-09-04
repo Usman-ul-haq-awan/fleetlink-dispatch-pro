@@ -59,24 +59,30 @@ export default function CarrierExportPanel({ carriers }) {
   };
 
   // Export carriers allocated within a date range. With no dates selected,
-  // exports ALL assigned carriers (the full scraped set) — no limit.
+  // exports ALL scraped carriers (assigned + unassigned) in a single click.
   const exportRange = () => {
-    const inRange = carriers.filter((c) => {
-      if (!c.assigned_date) return false;
-      const d = c.assigned_date.split("T")[0];
-      if (exportFrom && d < exportFrom) return false;
-      if (exportTo && d > exportTo) return false;
-      return true;
-    });
+    let inRange;
+    let label;
+    if (!exportFrom && !exportTo) {
+      // No dates = complete database, assigned and unassigned together.
+      inRange = carriers;
+      label = "all_scraped";
+    } else {
+      inRange = carriers.filter((c) => {
+        if (!c.assigned_date) return false;
+        const d = c.assigned_date.split("T")[0];
+        if (exportFrom && d < exportFrom) return false;
+        if (exportTo && d > exportTo) return false;
+        return true;
+      });
+      label = `${exportFrom || "start"}_to_${exportTo || "end"}`;
+    }
     if (inRange.length === 0) {
-      alert("No assigned carriers found for the selected range.");
+      alert("No carriers found for the selected range.");
       return;
     }
     setBusy("range");
     try {
-      const label = exportFrom || exportTo
-        ? `${exportFrom || "start"}_to_${exportTo || "end"}`
-        : "all_assigned";
       downloadRows(buildExportRows(inRange), `carriers_${label}`);
     } finally {
       setBusy(null);
@@ -130,7 +136,7 @@ export default function CarrierExportPanel({ carriers }) {
             Export by Allocation Range
           </h2>
           <p className="text-sm text-slate-500 mb-4">
-            Leave dates empty to export <strong>all {assignedCount.toLocaleString()} assigned carriers</strong>, or pick a range to narrow it down.
+            Leave dates empty to download <strong>all {carriers.length.toLocaleString()} scraped carriers</strong> (assigned + unassigned) in one click, or pick a range to narrow it down.
           </p>
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex flex-col">
