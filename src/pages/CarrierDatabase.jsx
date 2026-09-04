@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw, FileSpreadsheet, Loader2, Radar, Square, Trash2, Calendar, X } from "lucide-react";
-import * as XLSX from "xlsx";
+import { Search, Filter, Eye, Truck, RefreshCw, Loader2, Radar, Square, Trash2, Calendar, X } from "lucide-react";
 import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
+import CarrierExportPanel from "@/components/CarrierExportPanel";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
 import { useEntity } from "@/lib/entityContext";
 import VisitorEmptyState from "@/components/VisitorEmptyState";
@@ -68,11 +68,7 @@ export default function CarrierDatabase() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [researching, setResearching] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportFrom, setExportFrom] = useState("");
-  const [exportTo, setExportTo] = useState("");
-  const [exportingRange, setExportingRange] = useState(false);
-  const [exportingUnassigned, setExportingUnassigned] = useState(false);
+  const [activeTab, setActiveTab] = useState("carriers");
   const [researchCenter, setResearchCenter] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" } });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -243,93 +239,6 @@ export default function CarrierDatabase() {
     }
   };
 
-  const buildExportRows = (list) => list.map(c => ({
-    "Staff Lead Status": Array.isArray(c.staff_lead_status) ? c.staff_lead_status.join(", ") : (c.staff_lead_status || ""),
-    "Staff Comment": c.staff_comment || "",
-    "Allocated On": c.assigned_date || "",
-    "Legal Name": c.legal_name || "",
-    "DBA Name": c.dba_name || "",
-    "USDOT": c.usdot_number || "",
-    "MC": c.mc_number || "",
-    "MX": c.mx_number || "",
-    "Operating Status": c.operating_status || "",
-    "State": c.state || "",
-    "City": c.city || "",
-    "Phone": c.phone || "",
-    "Email": c.email || "",
-    "Owner": c.owner_name || "",
-    "Power Units": c.power_units ?? "",
-    "Drivers": c.drivers ?? "",
-    "Equipment": c.equipment_types || "",
-    "Cargo Types": c.cargo_types || "",
-    "Safety Qualification": c.safety_qualification || "",
-    "Safety Rating": c.safety_rating || "",
-    "Lead Score": c.lead_score ?? "",
-    "Lead Status": c.lead_status || "",
-    "Last Researched": c.last_researched_at || "",
-  }));
-
-  const downloadRows = (rows, name) => {
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Carriers");
-    XLSX.writeFile(wb, `${name}_${Date.now()}.xlsx`);
-  };
-
-  const exportToExcel = () => {
-    if (carriers.length === 0) return;
-    setExporting(true);
-    try {
-      const suffix = safetyFilter ? `_${safetyFilter.replace(/\s+/g, "_")}` : "";
-      downloadRows(buildExportRows(carriers), `carriers${suffix}`);
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const exportRangeToExcel = () => {
-    if (!exportFrom && !exportTo) {
-      alert("Please select a start and/or end date.");
-      return;
-    }
-    const inRange = carriers.filter((c) => {
-      if (!c.assigned_date) return false;
-      const d = c.assigned_date.split("T")[0];
-      if (exportFrom && d < exportFrom) return false;
-      if (exportTo && d > exportTo) return false;
-      return true;
-    });
-    if (inRange.length === 0) {
-      alert("No carriers allocated in the selected date range.");
-      return;
-    }
-    setExportingRange(true);
-    try {
-      const label = `${exportFrom || "start"}_to_${exportTo || "end"}`;
-      downloadRows(buildExportRows(inRange), `carriers_${label}`);
-    } finally {
-      setExportingRange(false);
-    }
-  };
-
-  // Separate full export of every carrier that has NOT been allocated to a
-  // sales agent (no assigned_date). These are excluded from the range export
-  // above, which filters by allocation date.
-  const exportUnassignedToExcel = () => {
-    const unassigned = carriers.filter((c) => !c.assigned_date);
-    if (unassigned.length === 0) {
-      alert("No unassigned carriers to export.");
-      return;
-    }
-    setExportingUnassigned(true);
-    try {
-      downloadRows(buildExportRows(unassigned), "carriers_unassigned");
-    } finally {
-      setExportingUnassigned(false);
-    }
-  };
-
   const states = [...new Set(carriers.map(c => c.state).filter(Boolean))].sort();
 
   if (isVisitor) return <VisitorEmptyState title="Carrier Database" message="Carrier records are hidden for visitors." />;
@@ -355,39 +264,6 @@ export default function CarrierDatabase() {
               Stop Research
             </button>
           )}
-          <button onClick={exportToExcel} disabled={exporting || carriers.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            Export to Excel
-          </button>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={exportFrom}
-              onChange={e => setExportFrom(e.target.value)}
-              className="px-2 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              title="Export range start (allocated date)"
-            />
-            <span className="text-xs text-slate-400">to</span>
-            <input
-              type="date"
-              value={exportTo}
-              onChange={e => setExportTo(e.target.value)}
-              className="px-2 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              title="Export range end (allocated date)"
-            />
-            <button onClick={exportRangeToExcel} disabled={exportingRange || carriers.length === 0}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap">
-              {exportingRange ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              Export Range
-            </button>
-            <button onClick={exportUnassignedToExcel} disabled={exportingUnassigned || carriers.length === 0}
-              title="Export all carriers not yet allocated to a sales agent"
-              className="flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 whitespace-nowrap">
-              {exportingUnassigned ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              Export Unassigned
-            </button>
-          </div>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -424,9 +300,25 @@ export default function CarrierDatabase() {
             Import Carriers
           </Link>
         </div>
-      </div>
+        </div>
 
-      {researchCenter.running && (
+        {/* Tabs */}
+        <div className="flex gap-1 mb-4 border-b border-slate-200">
+          <button onClick={() => setActiveTab("carriers")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "carriers" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            Carriers
+          </button>
+          <button onClick={() => setActiveTab("export")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "export" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            Export
+          </button>
+        </div>
+
+        {activeTab === "export" ? (
+          <CarrierExportPanel carriers={carriers} />
+        ) : (
+        <>
+        {researchCenter.running && (
         <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-violet-800 flex items-center gap-2">
@@ -688,6 +580,8 @@ export default function CarrierDatabase() {
             </table>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
