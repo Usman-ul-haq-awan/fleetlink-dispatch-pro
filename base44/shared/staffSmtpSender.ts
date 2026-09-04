@@ -37,14 +37,43 @@ export async function sendStaffSmtpEmail(
     ...(encryption === "STARTTLS" ? { requireTLS: true } : {}),
   });
 
+  // Always provide a plain-text alternative. Spam filters heavily penalize
+  // HTML-only messages; a multipart/alternative with a real text part is one
+  // of the strongest inbox-placement signals. If the caller passed HTML but
+  // no text, strip tags from the HTML as a fallback text body.
+  const textPart = (body && body.trim().length > 0)
+    ? body
+    : (html ? html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "");
+
+  // Deliverability headers that mailbox providers (Gmail, Outlook, Apple)
+  // check when deciding inbox vs. spam. These signal that the message is a
+  // legitimate, human-written sales email — not bulk/automated spam.
+  const listUnsubscribe = `mailto:${fromEmail}?subject=unsubscribe`;
+
   const info: any = await transporter.sendMail({
     from: `${fromName} <${fromEmail}>`,
     to,
     cc: opts.cc && opts.cc.length > 0 ? opts.cc.join(", ") : undefined,
     bcc: opts.bcc && opts.bcc.length > 0 ? opts.bcc.join(", ") : undefined,
+    replyTo: fromEmail,
     subject,
-    text: body || "",
+    text: textPart,
     ...(html ? { html } : {}),
+    headers: {
+      "Reply-To": fromEmail,
+      "List-Unsubscribe": listUnsubscribe,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      // Suppress auto-responders (out-of-office, read-receipts) which can
+      // trigger spam loops and hurt sender reputation.
+      "X-Auto-Response-Suppress": "All",
+      "Auto-Submitted": "no",
+      // Normal priority — high-priority flags are a spam-filter red flag.
+      "Priority": "normal",
+      "X-Priority": "3",
+      "X-MSMail-Priority": "Normal",
+      // Discourage automated classification as bulk mail.
+      "Precedence": "normal",
+    },
   });
 
   return { provider: "staff-smtp", messageId: info.messageId };
