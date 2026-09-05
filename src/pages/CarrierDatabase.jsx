@@ -6,6 +6,7 @@ import { Search, Filter, Eye, Truck, RefreshCw, Loader2, Radar, Square, Trash2, 
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
 import { useEntity } from "@/lib/entityContext";
 import VisitorEmptyState from "@/components/VisitorEmptyState";
+import CarrierExportPanel from "@/components/CarrierExportPanel";
 
 // Classifies a carrier's operation type from the stored carrier_segment /
 // operating_status fields. FMCSA uses "A" = Interstate, "B" = Intrastate,
@@ -67,6 +68,7 @@ export default function CarrierDatabase() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [researching, setResearching] = useState(false);
+  const [activeTab, setActiveTab] = useState("carriers");
   const [researchCenter, setResearchCenter] = useState({ running: false, progress: { total: 0, done: 0, failed: 0, current: "" } });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
@@ -305,6 +307,23 @@ export default function CarrierDatabase() {
         </div>
         </div>
 
+        {isAdmin && (
+          <div className="flex gap-1 mb-4 border-b border-slate-200">
+            <button onClick={() => setActiveTab("carriers")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "carriers" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+              Carriers
+            </button>
+            <button onClick={() => setActiveTab("export")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "export" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+              Export
+            </button>
+          </div>
+        )}
+
+        {isAdmin && activeTab === "export" ? (
+          <CarrierExportPanel carriers={carriers} />
+        ) : (
+        <>
         {researchCenter.running && (
         <div className="bg-violet-50 border border-violet-200 rounded-lg p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
@@ -567,6 +586,8 @@ export default function CarrierDatabase() {
             </table>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
