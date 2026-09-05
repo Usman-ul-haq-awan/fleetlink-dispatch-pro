@@ -63,6 +63,7 @@ export default function CarrierDatabase() {
   const [safetyFilter, setSafetyFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
+  const [notApproachedOnly, setNotApproachedOnly] = useState(false);
   const [agentFilter, setAgentFilter] = useState("");
   const [agentFilterName, setAgentFilterName] = useState("");
   const [page, setPage] = useState(0);
@@ -209,6 +210,14 @@ export default function CarrierDatabase() {
         filtered = filtered.filter(c => c.assigned_date && c.assigned_date.split("T")[0] === allocatedDate);
       }
       if (operationFilter) filtered = filtered.filter(c => getOperationType(c) === operationFilter);
+      if (notApproachedOnly) {
+        filtered = filtered.filter(c => {
+          const s = Array.isArray(c.staff_lead_status)
+            ? c.staff_lead_status
+            : (c.staff_lead_status ? [c.staff_lead_status] : []);
+          return s.length === 0 || s.every(x => x === "Not Approached");
+        });
+      }
 
       // Sort by allocated date descending (nulls last) — client-side, since the
       // server-side sort uses the stable updated_date field for complete paging.
@@ -228,7 +237,7 @@ export default function CarrierDatabase() {
     } finally {
       setLoading(false);
     }
-  }, [search, mcSearch, phoneSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, agentFilter, currentUser, isAdmin]);
+  }, [search, mcSearch, phoneSearch, allocatedDate, statusFilter, safetyFilter, stateFilter, operationFilter, notApproachedOnly, agentFilter, currentUser, isAdmin]);
 
   useEffect(() => { if (currentUser && !isVisitor) loadCarriers(true); }, [loadCarriers, currentUser, isVisitor]);
 
@@ -296,6 +305,12 @@ export default function CarrierDatabase() {
               Today
             </button>
           </div>
+          <button onClick={() => setNotApproachedOnly(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${notApproachedOnly ? "bg-emerald-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"}`}
+            title="Show only carriers not yet approached">
+            <Square className="w-4 h-4" />
+            Not Approached
+          </button>
           <button onClick={handleBulkDelete} disabled={deleting || selectedIds.size === 0}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50">
             {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
