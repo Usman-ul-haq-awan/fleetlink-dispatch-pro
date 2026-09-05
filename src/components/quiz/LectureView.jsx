@@ -6,6 +6,7 @@ import Module4Lecture from "./Module4Lecture";
 import Module5Lecture from "./Module5Lecture";
 import Module6Lecture from "./Module6Lecture";
 import Module7Lecture from "./Module7Lecture";
+import Module8Lecture from "./Module8Lecture";
 
 // Registry of lecture components per module. Only modules with authored
 // lecture content are listed here; others fall back to the "coming soon" state.
@@ -17,6 +18,7 @@ const LECTURES = {
   5: Module5Lecture,
   6: Module6Lecture,
   7: Module7Lecture,
+  8: Module8Lecture,
 };
 
 export default function LectureView({ module, title, onStartQuiz }) {
