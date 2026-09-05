@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { listAllCarriers } from "@/lib/paginatedList";
 import { Users, Calendar, ChevronDown, ChevronRight, Truck, UserCircle, Mail, Phone } from "lucide-react";
+import CarrierGroupsByDate from "@/components/allocation/CarrierGroupsByDate";
 
 // Status colors mirror the Carrier Database "Mark as" palette so the
 // performance breakdown is instantly recognizable.
@@ -253,70 +254,7 @@ function AgentRow({ agent, expanded, onToggle, fmtDate }) {
         <tr className="bg-slate-50">
           <td></td>
           <td colSpan={5} className="px-4 pb-4 pt-2">
-            <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">Carrier</th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">USDOT</th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">MC</th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">State</th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">Allocated On</th>
-                    <th className="text-center px-4 py-2 font-medium text-slate-600">Emails</th>
-                    <th className="text-center px-4 py-2 font-medium text-slate-600">Calls</th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">Lead Status</th>
-                    <th className="text-left px-4 py-2 font-medium text-slate-600">Mark as</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {agent.carriers.map(c => {
-                    const statuses = getStatuses(c);
-                    const approached = c._email_count > 0 || c._call_count > 0;
-                    return (
-                      <tr key={c.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-2">
-                          <Link to={`/carriers/${c.id}`} className="font-medium text-slate-900 hover:text-blue-600 hover:underline">
-                            {c.legal_name || c.dba_name || "Unknown"}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2 text-slate-600">{c.usdot_number || "—"}</td>
-                        <td className="px-4 py-2 text-slate-600">{c.mc_number || "—"}</td>
-                        <td className="px-4 py-2 text-slate-600">{c.state || "—"}</td>
-                        <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{fmtDate(c.assigned_date)}</td>
-                        <td className="px-4 py-2 text-center">
-                          <span className={`text-xs font-medium ${c._email_count > 0 ? "text-green-700" : "text-slate-400"}`}>
-                            {c._email_count || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <span className={`text-xs font-medium ${c._call_count > 0 ? "text-indigo-700" : "text-slate-400"}`}>
-                            {c._call_count || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">
-                          {approached ? (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Approached</span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Not approached</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          {statuses.length === 0 ? (
-                            <span className="text-xs text-slate-400">—</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
-                              {statuses.map(s => (
-                                <span key={s} className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[s] || "bg-slate-100 text-slate-600"}`}>{s}</span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <CarrierGroupsByDate carriers={agent.carriers} fmtDate={fmtDate} />
           </td>
         </tr>
       )}
