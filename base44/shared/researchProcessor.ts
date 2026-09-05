@@ -121,6 +121,16 @@ export async function processResearchResult(base44: any, opts: {
     staff_lead_status: normalizedStaffLeadStatus,
   };
 
+  // Auto-mark brokers as Approached + Dead Lead — brokers are not dispatch
+  // service leads, so they're pre-classified to keep them out of outreach
+  // queues. Applies to every carrier researched going forward (discovery +
+  // manual research), brokers only.
+  const isBroker = /BROKER/i.test(carrierUpdate.entity_type || "")
+    || /BROKER/i.test(carrier.carrier_type || "");
+  if (isBroker) {
+    carrierUpdate.staff_lead_status = ["Approached", "Dead Lead"];
+  }
+
   await base44.entities.Carrier.update(carrierId, carrierUpdate);
 
   const stepsCompleted: string[] = [];
