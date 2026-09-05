@@ -30,7 +30,18 @@ export default function StaffList({
     setTimeout(() => setAllocMsg((prev) => ({ ...prev, [key]: undefined })), 4000);
   };
 
-  // Load carrier allocation counts per user — only fetch assigned carriers
+  // A carrier record is a broker (freight arranger), not a motor carrier.
+  // Brokers must never be allocated to staff for outreach — only actual
+  // carriers should be assigned. The SDK has no contains operator, so we
+  // exclude them client-side after fetching.
+  const isBroker = (c) => {
+    const et = String(c.entity_type || "").toUpperCase();
+    const ct = String(c.carrier_type || "").toUpperCase();
+    return et.includes("BROKER") || ct.includes("BROKER");
+  };
+
+  // Load carrier allocation counts per user — only count real carriers,
+  // excluding brokers so the allocation badge reflects outreach targets.
   const loadCounts = async () => {
     try {
       const assigned = await base44.entities.Carrier.filter(
@@ -40,7 +51,9 @@ export default function StaffList({
       );
       const counts = {};
       assigned.forEach(c => {
-        if (c.assigned_to_user_id) counts[c.assigned_to_user_id] = (counts[c.assigned_to_user_id] || 0) + 1;
+        if (c.assigned_to_user_id && !isBroker(c)) {
+          counts[c.assigned_to_user_id] = (counts[c.assigned_to_user_id] || 0) + 1;
+        }
       });
       setCarrierCounts(counts);
     } catch {}
@@ -56,13 +69,17 @@ export default function StaffList({
       // This avoids loading all carriers client-side and reduces the race
       // window where two concurrent allocations could pick the same carriers.
       // We query for carriers where assigned_to_user_id is null/missing.
+      // We over-fetch (count * 3) so we still hit the target after dropping
+      // broker-type records client-side.
       const unassigned = await base44.entities.Carrier.filter(
         { assigned_to_user_id: null },
         "-updated_date",
-        count
+        count * 3
       );
-      // Extra safety: exclude any that somehow already have an assignment
-      const toAssign = unassigned.filter(c => !c.assigned_to_user_id).slice(0, count);
+      // Exclude brokers and any that somehow already have an assignment
+      const toAssign = unassigned
+        .filter(c => !c.assigned_to_user_id && !isBroker(c))
+        .slice(0, count);
       if (toAssign.length === 0) {
         setAllocMessage(key, "error", "No unassigned carriers available.");
         return;
