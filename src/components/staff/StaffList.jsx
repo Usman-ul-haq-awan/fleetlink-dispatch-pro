@@ -40,8 +40,26 @@ export default function StaffList({
     return et.includes("BROKER") || ct.includes("BROKER");
   };
 
-  // Load carrier allocation counts per user — only count real carriers,
-  // excluding brokers so the allocation badge reflects outreach targets.
+  // A carrier is "done" if it has already been approached/worked by a staff
+  // member — it has a staff lead mark, a staff comment, or an outreach lead
+  // status. These must NOT be re-allocated to a new agent; only fresh,
+  // never-touched carriers should be handed out.
+  const DONE_LEAD_STATUSES = new Set([
+    "Contacted", "Interested", "Human Handoff", "Onboarding",
+    "Active Client", "Do Not Contact",
+  ]);
+  const isDone = (c) => {
+    const marks = Array.isArray(c.staff_lead_status)
+      ? c.staff_lead_status
+      : (c.staff_lead_status ? [c.staff_lead_status] : []);
+    if (marks.some(s => s && s !== "Not Approached")) return true;
+    if (c.staff_comment && String(c.staff_comment).trim()) return true;
+    if (c.lead_status && DONE_LEAD_STATUSES.has(c.lead_status)) return true;
+    return false;
+  };
+
+  // Load carrier allocation counts per user — only count real, fresh carriers,
+  // excluding brokers and already-worked records.
   const loadCounts = async () => {
     try {
       const assigned = await base44.entities.Carrier.filter(
@@ -51,7 +69,7 @@ export default function StaffList({
       );
       const counts = {};
       assigned.forEach(c => {
-        if (c.assigned_to_user_id && !isBroker(c)) {
+        if (c.assigned_to_user_id && !isBroker(c) && !isDone(c)) {
           counts[c.assigned_to_user_id] = (counts[c.assigned_to_user_id] || 0) + 1;
         }
       });
@@ -76,9 +94,11 @@ export default function StaffList({
         "-updated_date",
         count * 3
       );
-      // Exclude brokers and any that somehow already have an assignment
+      // Exclude brokers, already-worked carriers, and any that somehow
+      // already have an assignment — only fresh, never-approached carriers
+      // should be allocated.
       const toAssign = unassigned
-        .filter(c => !c.assigned_to_user_id && !isBroker(c))
+        .filter(c => !c.assigned_to_user_id && !isBroker(c) && !isDone(c))
         .slice(0, count);
       if (toAssign.length === 0) {
         setAllocMessage(key, "error", "No unassigned carriers available.");
