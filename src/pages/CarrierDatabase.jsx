@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Search, Filter, Eye, Truck, RefreshCw, Loader2, Radar, Square, Trash2, Calendar, X } from "lucide-react";
-import { listAllCarriers, listCarriersForUser } from "@/lib/paginatedList";
+
 import CarrierExportPanel from "@/components/CarrierExportPanel";
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
 import { useEntity } from "@/lib/entityContext";
@@ -170,14 +170,23 @@ export default function CarrierDatabase() {
   const loadCarriers = useCallback(async (reset = false) => {
     setLoading(true);
     try {
-      // Load with a stable, never-null sort field. Sorting server-side by
-      // assigned_date breaks skip-pagination because most carriers have a null
-      // assigned_date — that unsorted null group shifts between pages and skip
-      // jumps past them, so ~2000 records never come back. We re-sort by
-      // allocated date client-side below.
-      let filtered = (currentUser && !isAdmin)
-        ? await listCarriersForUser(currentUser.id, "-updated_date")
-        : await listAllCarriers("-updated_date");
+      // Build a server-side query so we only fetch one bounded batch instead of
+      // paginating through the entire database. Text searches (name/usdot/mc/
+      // phone) and the derived operation-type filter stay client-side because
+      // the SDK has no regex/contains operator; they run on the fetched batch.
+      const query = {};
+      if (statusFilter) query.lead_status = statusFilter;
+      if (safetyFilter) query.safety_qualification = safetyFilter;
+      if (stateFilter) query.state = stateFilter;
+      if (agentFilter) query.assigned_to_user_id = agentFilter;
+      if (!isAdmin && currentUser) query.assigned_to_user_id = currentUser.id;
+
+      // Bounded batch — 1000 most recently updated. This is one API call, not
+      // the dozens of sequential 5000-record round-trips listAllCarriers did.
+      const BATCH = 1000;
+      let filtered = Object.keys(query).length > 0
+        ? await base44.entities.Carrier.filter(query, "-updated_date", BATCH)
+        : await base44.entities.Carrier.list("-updated_date", BATCH);
 
       if (search) {
         const q = search.toLowerCase();
@@ -199,11 +208,7 @@ export default function CarrierDatabase() {
       if (allocatedDate) {
         filtered = filtered.filter(c => c.assigned_date && c.assigned_date.split("T")[0] === allocatedDate);
       }
-      if (statusFilter) filtered = filtered.filter(c => c.lead_status === statusFilter);
-      if (safetyFilter) filtered = filtered.filter(c => c.safety_qualification === safetyFilter);
-      if (stateFilter) filtered = filtered.filter(c => c.state === stateFilter);
       if (operationFilter) filtered = filtered.filter(c => getOperationType(c) === operationFilter);
-      if (agentFilter) filtered = filtered.filter(c => c.assigned_to_user_id === agentFilter);
 
       // Sort by allocated date descending (nulls last) — client-side, since the
       // server-side sort uses the stable updated_date field for complete paging.
