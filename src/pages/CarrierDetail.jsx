@@ -34,6 +34,27 @@ export default function CarrierDetail() {
   });
   const [assignedAgent, setAssignedAgent] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [markingApproached, setMarkingApproached] = useState(false);
+
+  const handleMarkApproached = async () => {
+    if (!window.confirm("Mark this carrier as Approached? Use this after you have manually sent an outreach email.")) return;
+    setMarkingApproached(true);
+    try {
+      await base44.entities.EmailLog.create({
+        carrier_id: id,
+        to_email: carrier?.email || "manual-outreach",
+        subject: "Manual outreach email",
+        body: "Carrier marked as approached after a manual email was sent outside the platform.",
+        status: "Sent",
+        sent_at: new Date().toISOString(),
+      });
+      await loadAll();
+    } catch (err) {
+      alert("Failed to mark as approached: " + (err.response?.data?.error || err.message));
+    } finally {
+      setMarkingApproached(false);
+    }
+  };
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
@@ -197,10 +218,15 @@ export default function CarrierDetail() {
               Email: Approached ({relatedData.emails.filter(e => e.status === "Sent").length} sent)
             </span>
           ) : (
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+            <button
+              onClick={handleMarkApproached}
+              disabled={markingApproached}
+              title="Click after you have manually sent an outreach email to mark this carrier as Approached"
+              className="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition-colors cursor-pointer disabled:opacity-50"
+            >
               <Mail className="w-3 h-3" />
-              Email: Not Approached
-            </span>
+              {markingApproached ? "Marking..." : "Email: Not Approached — Mark as Approached"}
+            </button>
           )}
         </div>
       </div>
