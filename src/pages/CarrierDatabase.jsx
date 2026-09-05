@@ -321,7 +321,7 @@ export default function CarrierDatabase() {
         )}
 
         {isAdmin && activeTab === "export" ? (
-          <CarrierExportPanel carriers={carriers} />
+          <CarrierExportPanel />
         ) : (
         <>
         {researchCenter.running && (
