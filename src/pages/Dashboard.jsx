@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [brokers, setBrokers] = useState([]);
   const [loadingBrokers, setLoadingBrokers] = useState(false);
   const [rescanningBroker, setRescanningBroker] = useState(null);
+  const [emailSentCarrierIds, setEmailSentCarrierIds] = useState(new Set());
   const { isVisitor } = useEntity();
 
   useEffect(() => {
@@ -167,6 +168,7 @@ export default function Dashboard() {
         onboarding: onboardingRecords.filter(o => !["Active Client", "Lost"].includes(o.onboarding_status)).length,
         activeClients: countBy(onboardingRecords, "onboarding_status", "Active Client"),
       });
+      setEmailSentCarrierIds(new Set(emails.filter(e => e.status === "Sent" && e.carrier_id).map(e => e.carrier_id)));
       setRecentActivity(activity);
     } catch (err) {
       console.error("Dashboard load error:", err);
@@ -384,9 +386,9 @@ export default function Dashboard() {
       </div>
       </>
       ) : activeTab === "followup" ? (
-        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
+        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emailSentCarrierIds={emailSentCarrierIds} emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
       ) : activeTab === "leads" ? (
-        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
+        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emailSentCarrierIds={emailSentCarrierIds} emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
       ) : activeTab === "allocations" ? (
         <AllocationSection />
       ) : activeTab === "tools" ? (
