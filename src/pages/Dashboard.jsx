@@ -31,10 +31,33 @@ export default function Dashboard() {
   const [loadingBrokers, setLoadingBrokers] = useState(false);
   const [rescanningBroker, setRescanningBroker] = useState(null);
   const [emailSentCarrierIds, setEmailSentCarrierIds] = useState(new Set());
+  const [agentMap, setAgentMap] = useState({});
   const { isVisitor } = useEntity();
 
   useEffect(() => {
     base44.auth.me().then(setCurrentUser).catch(() => {});
+    // Build a user_id -> { name, sudo } map so the Follow-up / Leads tables
+    // can show the assigned sales agent's name and Sales SUDO badge.
+    (async () => {
+      try {
+        const [users, staff] = await Promise.all([
+          base44.entities.User.list("-created_date", 500).catch(() => []),
+          base44.entities.StaffMember.list("-created_date", 500).catch(() => []),
+        ]);
+        const sudoByEmail = {};
+        staff.forEach(s => { if (s.sales_sudo) sudoByEmail[(s.email || "").toLowerCase()] = s.sales_sudo; });
+        const map = {};
+        users.forEach(u => {
+          map[u.id] = {
+            name: u.full_name || u.email || "Unknown",
+            sudo: sudoByEmail[(u.email || "").toLowerCase()] || "",
+          };
+        });
+        setAgentMap(map);
+      } catch (err) {
+        console.error("Agent map load error:", err);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -387,9 +410,9 @@ export default function Dashboard() {
       </div>
       </>
       ) : activeTab === "followup" ? (
-        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emailSentCarrierIds={emailSentCarrierIds} from="followup" emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
+        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emailSentCarrierIds={emailSentCarrierIds} agentMap={agentMap} from="followup" emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
       ) : activeTab === "leads" ? (
-        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emailSentCarrierIds={emailSentCarrierIds} from="leads" emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
+        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emailSentCarrierIds={emailSentCarrierIds} agentMap={agentMap} from="leads" emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
       ) : activeTab === "allocations" ? (
         <AllocationSection />
       ) : activeTab === "tools" ? (

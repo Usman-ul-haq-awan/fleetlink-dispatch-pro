@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Clock, Eye, Mail } from "lucide-react";
 
-export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clock, emptyText = 'No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.', emailSentCarrierIds, from }) {
+export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clock, emptyText = 'No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.', emailSentCarrierIds, agentMap, from }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -32,6 +32,7 @@ export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clo
             <th className="text-left px-4 py-3 font-medium text-slate-600">USDOT</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">MC</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">State</th>
+            <th className="text-left px-4 py-3 font-medium text-slate-600">Agent</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">Phone</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">Staff Comment</th>
@@ -49,7 +50,22 @@ export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clo
               </td>
               <td className="px-4 py-3 text-slate-600">{carrier.usdot_number || "—"}</td>
               <td className="px-4 py-3 text-slate-600">{carrier.mc_number || "—"}</td>
-              <td className="px-4 py-3 text-slate-600">{carrier.state || "—"}</td>
+              <td className="px-4 py-3 text-slate-600 text-xs">
+                {(() => {
+                  const a = agentMap?.[carrier.assigned_to_user_id];
+                  if (!a) return <span className="text-slate-400">—</span>;
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-700 font-medium truncate max-w-[120px]">{a.name}</span>
+                      {a.sudo && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-700" title="Sales SUDO">
+                          {a.sudo}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </td>
               <td className="px-4 py-3 text-slate-600 text-xs">{carrier.phone || "—"}</td>
               <td className="px-4 py-3 text-xs">
                 {carrier.email ? (
