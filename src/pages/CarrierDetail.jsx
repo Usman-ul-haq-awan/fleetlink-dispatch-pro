@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import {
   ArrowLeft, RefreshCw, ExternalLink, Mail, Phone, ShieldCheck, Truck,
@@ -23,6 +23,13 @@ const SAFETY_COLORS = {
 
 export default function CarrierDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const from = searchParams.get("from");
+  const backLink = from === "followup"
+    ? { to: "/?tab=followup", label: "Back to Follow-up" }
+    : from === "leads"
+    ? { to: "/?tab=leads", label: "Back to Leads" }
+    : { to: "/carriers", label: "Back to Carrier Database" };
   const [carrier, setCarrier] = useState(null);
   const [activeTab, setActiveTab] = useState("Overview");
   const [loading, setLoading] = useState(true);
@@ -140,7 +147,7 @@ export default function CarrierDetail() {
     return (
       <div className="p-6 text-center">
         <p className="text-slate-500">Carrier not found.</p>
-        <Link to="/carriers" className="text-blue-600 text-sm hover:underline mt-2 inline-block">← Back to Carrier Database</Link>
+        <Link to={backLink.to} className="text-blue-600 text-sm hover:underline mt-2 inline-block">← {backLink.label}</Link>
       </div>
     );
   }

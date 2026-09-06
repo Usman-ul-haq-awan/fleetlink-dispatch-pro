@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Truck, Search, Mail, Phone, UserCheck, ClipboardCheck, AlertCircle, CheckCircle, Clock, ShieldCheck, RefreshCw, Loader2, Star } from "lucide-react";
 import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
@@ -21,7 +21,8 @@ export default function Dashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "overview");
   const [followUpCarriers, setFollowUpCarriers] = useState([]);
   const [loadingFollowUp, setLoadingFollowUp] = useState(false);
   const [leadCarriers, setLeadCarriers] = useState([]);
@@ -386,9 +387,9 @@ export default function Dashboard() {
       </div>
       </>
       ) : activeTab === "followup" ? (
-        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emailSentCarrierIds={emailSentCarrierIds} emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
+        <FollowUpLeadsTable carriers={followUpCarriers} loading={loadingFollowUp} emailSentCarrierIds={emailSentCarrierIds} from="followup" emptyText='No follow-ups. Mark carriers as "Follow-up" from their detail page to see them here.' />
       ) : activeTab === "leads" ? (
-        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emailSentCarrierIds={emailSentCarrierIds} emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
+        <FollowUpLeadsTable carriers={leadCarriers} loading={loadingLeads} icon={Star} emailSentCarrierIds={emailSentCarrierIds} from="leads" emptyText='No leads yet. Mark carriers as "Lead" from their detail page to see them here.' />
       ) : activeTab === "allocations" ? (
         <AllocationSection />
       ) : activeTab === "tools" ? (

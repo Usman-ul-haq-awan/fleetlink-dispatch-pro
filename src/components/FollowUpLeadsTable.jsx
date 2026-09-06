@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Clock, Eye, Mail } from "lucide-react";
 
-export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clock, emptyText = 'No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.', emailSentCarrierIds }) {
+export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clock, emptyText = 'No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.', emailSentCarrierIds, from }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -43,7 +43,7 @@ export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clo
             <tr key={carrier.id} className="hover:bg-slate-50">
               <td className="px-4 py-3 text-center text-xs font-semibold text-slate-400">{idx + 1}</td>
               <td className="px-4 py-3">
-                <Link to={`/carriers/${carrier.id}`} className="font-medium text-slate-900 hover:text-blue-600">
+                <Link to={`/carriers/${carrier.id}${from ? `?from=${from}` : ""}`} className="font-medium text-slate-900 hover:text-blue-600">
                   {carrier.legal_name || carrier.dba_name || "Unknown"}
                 </Link>
               </td>
@@ -63,7 +63,7 @@ export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clo
               </td>
               <td className="px-4 py-3 text-slate-600 text-xs max-w-xs truncate">{carrier.staff_comment || "—"}</td>
               <td className="px-4 py-3 text-center">
-                <Link to={`/carriers/${carrier.id}`} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded inline-flex">
+                <Link to={`/carriers/${carrier.id}${from ? `?from=${from}` : ""}`} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded inline-flex">
                   <Eye className="w-4 h-4" />
                 </Link>
               </td>
