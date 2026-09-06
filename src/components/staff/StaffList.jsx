@@ -314,6 +314,9 @@ export default function StaffList({
     }
   });
 
+  const adminMembers = merged.filter((m) => m.role === "admin");
+  const staffOnlyMembers = merged.filter((m) => m.role !== "admin");
+
   const handleRoleChange = async (userId, newRole, staffMemberId, member) => {
     if (newRole === "user" && member.userId === currentUserId) {
       if (!window.confirm("You are about to demote YOURSELF from Admin. You will lose access to Settings and staff management. Continue?")) return;
@@ -341,16 +344,279 @@ export default function StaffList({
     }
   };
 
-  return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5">
-      <h3 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
-        <Shield className="w-5 h-5 text-purple-600" />
-        Staff Members & Roles
-      </h3>
-      <p className="text-sm text-slate-500 mb-4">
-        Approve staff to generate their 4-digit login code (shown next to their name — share it with them). Staff must enter this code on every login. Phone and ID document are editable anytime.
-      </p>
+  const renderMemberRow = (m) => (
+    <tr key={m.key} className="hover:bg-slate-50">
+      <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <span>{m.full_name}</span>
+          {m.login_code && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-purple-100 text-purple-700" title="4-digit login code — share with staff member">
+              <KeyRound className="w-3 h-3" />
+              {m.login_code}
+            </span>
+          )}
+          {m.staffMemberId && (
+            <button
+              onClick={() => handleRegenerate(m.staffMemberId, m.key)}
+              disabled={regenerating === m.key}
+              className="text-slate-300 hover:text-purple-600 disabled:opacity-50"
+              title="Regenerate login code"
+            >
+              {regenerating === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{m.email}</td>
+      <td className="px-4 py-2 text-xs whitespace-nowrap">
+        {editingSudo === m.key ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={sudoInput}
+              onChange={(e) => setSudoInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveSudo(m.staffMemberId, m.key); if (e.key === "Escape") setEditingSudo(null); }}
+              autoFocus
+              placeholder="e.g. JOHN"
+              className="w-24 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 uppercase font-mono font-bold"
+            />
+            <button onClick={() => saveSudo(m.staffMemberId, m.key)} disabled={savingSudo === m.key}
+              className="text-green-600 hover:text-green-800 disabled:opacity-50">
+              {savingSudo === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            </button>
+            <button onClick={() => setEditingSudo(null)} className="text-red-400 hover:text-red-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => m.staffMemberId && startEditSudo(m.key, m.sales_sudo)}
+            className={`flex items-center gap-1 font-mono font-bold ${m.sales_sudo ? "text-purple-700" : "text-slate-300"} hover:text-purple-600`}
+            title={m.staffMemberId ? "Click to edit Sales Sudo (used in cold email signatures)" : ""}
+          >
+            {m.sales_sudo || "—"}
+          </button>
+        )}
+      </td>
+      <td className="px-4 py-2 text-slate-600 text-xs whitespace-nowrap">
+        {editingPhone === m.key ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="tel"
+              value={phoneInput}
+              onChange={(e) => setPhoneInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") savePhone(m.staffMemberId, m.key); if (e.key === "Escape") setEditingPhone(null); }}
+              autoFocus
+              className="w-32 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button onClick={() => savePhone(m.staffMemberId, m.key)} disabled={savingPhone === m.key}
+              className="text-green-600 hover:text-green-800 disabled:opacity-50">
+              {savingPhone === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            </button>
+            <button onClick={() => setEditingPhone(null)} className="text-red-400 hover:text-red-600">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => m.staffMemberId && startEditPhone(m.key, m.phone)}
+            className={`flex items-center gap-1 ${m.phone ? "text-slate-600" : "text-slate-300"} hover:text-blue-600`}
+            title={m.staffMemberId ? "Click to edit phone" : ""}
+          >
+            <Phone className="w-3 h-3" />
+            {m.phone || "—"}
+          </button>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        {m.staffMemberId ? (
+          <div className="flex items-center gap-1.5">
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+              m.approved ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+            }`}>
+              {m.approved ? "Approved" : "Pending"}
+            </span>
+            <button
+              onClick={() => handleApproveClick(m.staffMemberId, m.approved, m.key)}
+              disabled={approving === m.key}
+              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border whitespace-nowrap disabled:opacity-50 ${
+                m.approved
+                  ? "text-red-700 border-red-200 hover:bg-red-50"
+                  : "text-green-700 border-green-200 hover:bg-green-50"
+              }`}
+              title={m.approved ? "Revoke approval" : "Approve & generate login code"}
+            >
+              {approving === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : m.approved ? <X className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
+              {m.approved ? "Revoke" : "Approve"}
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-flex items-center gap-1 ${m.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+          {m.role === "admin" ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
+          {m.role === "admin" ? "Admin" : "Staff"}
+        </span>
+      </td>
+      <td className="px-4 py-2">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+          (m.entity_type || "staff") === "admin" ? "bg-purple-100 text-purple-700" :
+          (m.entity_type || "staff") === "student" ? "bg-emerald-100 text-emerald-700" :
+          (m.entity_type || "staff") === "visitor" ? "bg-slate-200 text-slate-600" :
+          "bg-blue-100 text-blue-700"
+        }`}>
+          {m.entity_type || "staff"}
+        </span>
+      </td>
+      <td className="px-4 py-2 text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          {m.identity_document_url ? (
+            <a href={m.identity_document_url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
+              title={m.identity_document_name || "View document"}>
+              <Eye className="w-4 h-4" /> View
+            </a>
+          ) : (
+            <span className="text-slate-300 text-xs">—</span>
+          )}
+          {m.staffMemberId && (
+            <>
+              <button
+                onClick={() => fileInputRefs.current[m.key]?.click()}
+                disabled={uploadingId === m.key}
+                className="inline-flex items-center gap-1 text-slate-400 hover:text-blue-600 text-xs disabled:opacity-50"
+                title="Upload / replace ID document"
+              >
+                {uploadingId === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              </button>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                ref={(el) => (fileInputRefs.current[m.key] = el)}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleIdUpload(m.staffMemberId, f, m.key); e.target.value = ""; }}
+                className="hidden"
+              />
+            </>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-2 text-center">
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.role === "admin" ? "bg-slate-100 text-slate-500" : (carrierCounts[m.userId] ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-400")}`}>
+              <Truck className="w-3 h-3" />
+              {m.role === "admin" ? "All (Admin)" : (carrierCounts[m.userId] || 0)}
+            </span>
+            {m.role !== "admin" && (carrierCounts[m.userId] || 0) > 0 && (
+              <button
+                onClick={() => handleUnassignAll(m.userId, m.key)}
+                disabled={unassigning === m.key}
+                className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                title="Unassign all carriers"
+              >
+                {unassigning === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
+          {m.role !== "admin" && (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min="1"
+                value={allocCount[m.key] || ""}
+                onChange={(e) => setAllocCount(prev => ({ ...prev, [m.key]: e.target.value }))}
+                placeholder="Count"
+                disabled={allocating === m.key}
+                className="w-16 px-1.5 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                onClick={() => handleAllocate(m.userId, m.key)}
+                disabled={allocating === m.key || !allocCount[m.key]}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
+                title="Allocate unassigned carriers to this staff member"
+              >
+                {allocating === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
+                Allocate
+              </button>
+            </div>
+          )}
+          {allocMsg[m.key] && (
+            <span className={`text-[10px] ${allocMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
+              {allocMsg[m.key].text}
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-2 text-center">
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleResendInvite(m.email, m.role, m.key)}
+              disabled={resending === m.key}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
+              title="Re-send invitation email"
+            >
+              {resending === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+              Resend
+            </button>
+            <button
+              onClick={() => handleResetPassword(m.email, m.key)}
+              disabled={resetting === m.key}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-amber-700 border-amber-200 hover:bg-amber-50 disabled:opacity-50 whitespace-nowrap"
+              title="Send password reset email"
+            >
+              {resetting === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+              Reset PW
+            </button>
+          </div>
+          {actionMsg[m.key] && (
+            <span className={`text-[10px] ${actionMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
+              {actionMsg[m.key].text}
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-2 text-center">
+        {changingRole === m.key ? (
+          <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
+        ) : (
+          <select
+            value={m.entity_type || "staff"}
+            onChange={(e) => handleEntityTypeChange(e, m)}
+            disabled={(!m.userId && !m.staffMemberId) || m.userId === currentUserId}
+            className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            title={m.userId === currentUserId ? "You cannot change your own role" : "Change entity type / role"}
+          >
+            <option value="staff">Staff</option>
+            <option value="student">Student</option>
+            <option value="visitor">Visitor</option>
+            <option value="admin">Admin</option>
+          </select>
+        )}
+      </td>
+      <td className="px-4 py-2 text-center">
+        <button
+          onClick={() => handleDelete(m.userId, m.staffMemberId, m.email, m.key)}
+          disabled={m.userId === currentUserId}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-red-700 border-red-200 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
+          title={m.userId === currentUserId ? "You cannot delete your own account" : "Remove staff member"}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete
+        </button>
+      </td>
+    </tr>
+  );
 
+  const renderTable = (members, title, icon, emptyMsg) => (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        {icon}
+        <h4 className="font-semibold text-slate-800 text-sm">{title}</h4>
+        <span className="text-xs text-slate-400">({members.length})</span>
+      </div>
       <div className="border border-slate-200 rounded-lg overflow-auto max-h-[320px]">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
@@ -370,275 +636,27 @@ export default function StaffList({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {merged.length === 0 ? (
-              <tr><td colSpan={12} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
-            ) : merged.map((m) => (
-              <tr key={m.key} className="hover:bg-slate-50">
-                <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <span>{m.full_name}</span>
-                    {m.login_code && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-purple-100 text-purple-700" title="4-digit login code — share with staff member">
-                        <KeyRound className="w-3 h-3" />
-                        {m.login_code}
-                      </span>
-                    )}
-                    {m.staffMemberId && (
-                      <button
-                        onClick={() => handleRegenerate(m.staffMemberId, m.key)}
-                        disabled={regenerating === m.key}
-                        className="text-slate-300 hover:text-purple-600 disabled:opacity-50"
-                        title="Regenerate login code"
-                      >
-                        {regenerating === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{m.email}</td>
-                <td className="px-4 py-2 text-xs whitespace-nowrap">
-                  {editingSudo === m.key ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        value={sudoInput}
-                        onChange={(e) => setSudoInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") saveSudo(m.staffMemberId, m.key); if (e.key === "Escape") setEditingSudo(null); }}
-                        autoFocus
-                        placeholder="e.g. JOHN"
-                        className="w-24 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 uppercase font-mono font-bold"
-                      />
-                      <button onClick={() => saveSudo(m.staffMemberId, m.key)} disabled={savingSudo === m.key}
-                        className="text-green-600 hover:text-green-800 disabled:opacity-50">
-                        {savingSudo === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      </button>
-                      <button onClick={() => setEditingSudo(null)} className="text-red-400 hover:text-red-600">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => m.staffMemberId && startEditSudo(m.key, m.sales_sudo)}
-                      className={`flex items-center gap-1 font-mono font-bold ${m.sales_sudo ? "text-purple-700" : "text-slate-300"} hover:text-purple-600`}
-                      title={m.staffMemberId ? "Click to edit Sales Sudo (used in cold email signatures)" : ""}
-                    >
-                      {m.sales_sudo || "—"}
-                    </button>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-slate-600 text-xs whitespace-nowrap">
-                  {editingPhone === m.key ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="tel"
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") savePhone(m.staffMemberId, m.key); if (e.key === "Escape") setEditingPhone(null); }}
-                        autoFocus
-                        className="w-32 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                      <button onClick={() => savePhone(m.staffMemberId, m.key)} disabled={savingPhone === m.key}
-                        className="text-green-600 hover:text-green-800 disabled:opacity-50">
-                        {savingPhone === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      </button>
-                      <button onClick={() => setEditingPhone(null)} className="text-red-400 hover:text-red-600">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => m.staffMemberId && startEditPhone(m.key, m.phone)}
-                      className={`flex items-center gap-1 ${m.phone ? "text-slate-600" : "text-slate-300"} hover:text-blue-600`}
-                      title={m.staffMemberId ? "Click to edit phone" : ""}
-                    >
-                      <Phone className="w-3 h-3" />
-                      {m.phone || "—"}
-                    </button>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {m.staffMemberId ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                        m.approved ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-                      }`}>
-                        {m.approved ? "Approved" : "Pending"}
-                      </span>
-                      <button
-                        onClick={() => handleApproveClick(m.staffMemberId, m.approved, m.key)}
-                        disabled={approving === m.key}
-                        className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border whitespace-nowrap disabled:opacity-50 ${
-                          m.approved
-                            ? "text-red-700 border-red-200 hover:bg-red-50"
-                            : "text-green-700 border-green-200 hover:bg-green-50"
-                        }`}
-                        title={m.approved ? "Revoke approval" : "Approve & generate login code"}
-                      >
-                        {approving === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : m.approved ? <X className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
-                        {m.approved ? "Revoke" : "Approve"}
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium inline-flex items-center gap-1 ${m.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                    {m.role === "admin" ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                    {m.role === "admin" ? "Admin" : "Staff"}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                    (m.entity_type || "staff") === "admin" ? "bg-purple-100 text-purple-700" :
-                    (m.entity_type || "staff") === "student" ? "bg-emerald-100 text-emerald-700" :
-                    (m.entity_type || "staff") === "visitor" ? "bg-slate-200 text-slate-600" :
-                    "bg-blue-100 text-blue-700"
-                  }`}>
-                    {m.entity_type || "staff"}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    {m.identity_document_url ? (
-                      <a href={m.identity_document_url} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                        title={m.identity_document_name || "View document"}>
-                        <Eye className="w-4 h-4" /> View
-                      </a>
-                    ) : (
-                      <span className="text-slate-300 text-xs">—</span>
-                    )}
-                    {m.staffMemberId && (
-                      <>
-                        <button
-                          onClick={() => fileInputRefs.current[m.key]?.click()}
-                          disabled={uploadingId === m.key}
-                          className="inline-flex items-center gap-1 text-slate-400 hover:text-blue-600 text-xs disabled:opacity-50"
-                          title="Upload / replace ID document"
-                        >
-                          {uploadingId === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                        </button>
-                        <input
-                          type="file"
-                          accept="image/*,application/pdf"
-                          ref={(el) => (fileInputRefs.current[m.key] = el)}
-                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleIdUpload(m.staffMemberId, f, m.key); e.target.value = ""; }}
-                          className="hidden"
-                        />
-                      </>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <div className="flex flex-col items-center gap-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.role === "admin" ? "bg-slate-100 text-slate-500" : (carrierCounts[m.userId] ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-400")}`}>
-                        <Truck className="w-3 h-3" />
-                        {m.role === "admin" ? "All (Admin)" : (carrierCounts[m.userId] || 0)}
-                      </span>
-                      {m.role !== "admin" && (carrierCounts[m.userId] || 0) > 0 && (
-                        <button
-                          onClick={() => handleUnassignAll(m.userId, m.key)}
-                          disabled={unassigning === m.key}
-                          className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
-                          title="Unassign all carriers"
-                        >
-                          {unassigning === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                        </button>
-                      )}
-                    </div>
-                    {m.role !== "admin" && (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min="1"
-                          value={allocCount[m.key] || ""}
-                          onChange={(e) => setAllocCount(prev => ({ ...prev, [m.key]: e.target.value }))}
-                          placeholder="Count"
-                          disabled={allocating === m.key}
-                          className="w-16 px-1.5 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <button
-                          onClick={() => handleAllocate(m.userId, m.key)}
-                          disabled={allocating === m.key || !allocCount[m.key]}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
-                          title="Allocate unassigned carriers to this staff member"
-                        >
-                          {allocating === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Truck className="w-3.5 h-3.5" />}
-                          Allocate
-                        </button>
-                      </div>
-                    )}
-                    {allocMsg[m.key] && (
-                      <span className={`text-[10px] ${allocMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
-                        {allocMsg[m.key].text}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleResendInvite(m.email, m.role, m.key)}
-                        disabled={resending === m.key}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-blue-700 border-blue-200 hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
-                        title="Re-send invitation email"
-                      >
-                        {resending === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                        Resend
-                      </button>
-                      <button
-                        onClick={() => handleResetPassword(m.email, m.key)}
-                        disabled={resetting === m.key}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-amber-700 border-amber-200 hover:bg-amber-50 disabled:opacity-50 whitespace-nowrap"
-                        title="Send password reset email"
-                      >
-                        {resetting === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
-                        Reset PW
-                      </button>
-                    </div>
-                    {actionMsg[m.key] && (
-                      <span className={`text-[10px] ${actionMsg[m.key].type === "success" ? "text-green-600" : "text-red-600"}`}>
-                        {actionMsg[m.key].text}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-2 text-center">
-                  {changingRole === m.key ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
-                  ) : (
-                    <select
-                      value={m.entity_type || "staff"}
-                      onChange={(e) => handleEntityTypeChange(e, m)}
-                      disabled={(!m.userId && !m.staffMemberId) || m.userId === currentUserId}
-                      className="px-2 py-1 text-xs border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-                      title={m.userId === currentUserId ? "You cannot change your own role" : "Change entity type / role"}
-                    >
-                      <option value="staff">Staff</option>
-                      <option value="student">Student</option>
-                      <option value="visitor">Visitor</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-center">
-                  <button
-                    onClick={() => handleDelete(m.userId, m.staffMemberId, m.email, m.key)}
-                    disabled={m.userId === currentUserId}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border text-red-700 border-red-200 hover:bg-red-50 disabled:opacity-50 whitespace-nowrap"
-                    title={m.userId === currentUserId ? "You cannot delete your own account" : "Remove staff member"}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {members.length === 0 ? (
+              <tr><td colSpan={12} className="px-4 py-4 text-center text-slate-400">{emptyMsg}</td></tr>
+            ) : members.map((m) => renderMemberRow(m))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 p-5">
+      <h3 className="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+        <Shield className="w-5 h-5 text-purple-600" />
+        Staff Members & Roles
+      </h3>
+      <p className="text-sm text-slate-500 mb-4">
+        Approve staff to generate their 4-digit login code (shown next to their name — share it with them). Staff must enter this code on every login. Phone and ID document are editable anytime.
+      </p>
+      <div className="space-y-6">
+        {renderTable(adminMembers, "Administrators", <Shield className="w-4 h-4 text-purple-600" />, "No administrators.")}
+        {renderTable(staffOnlyMembers, "Staff Members", <User className="w-4 h-4 text-blue-600" />, "No staff members yet. Add your first staff member above.")}
       </div>
     </div>
   );
