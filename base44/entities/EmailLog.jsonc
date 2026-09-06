@@ -37,6 +37,19 @@
       ],
       "default": "Queued"
     },
+    "email_type": {
+      "type": "string",
+      "enum": [
+        "cold_outreach",
+        "transactional",
+        "onboarding",
+        "notification",
+        "staff",
+        "other"
+      ],
+      "default": "other",
+      "description": "Email category \u2014 only cold_outreach counts toward the 50/day cold-email limit"
+    },
     "is_follow_up": {
       "type": "boolean",
       "default": false

@@ -105,6 +105,13 @@ const SETTING_GROUPS = [
     ],
   },
   {
+    category: "cold_email",
+    label: "Cold Email Outreach",
+    settings: [
+      { key: "cold_email_daily_limit", label: "Cold Email Daily Limit (global, cold outreach only)", type: "number" },
+    ],
+  },
+  {
     category: "staff_smtp",
     label: "Staff SMTP Email Server (Manual — staff only)",
     icon: "mail",

@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Search, Filter, Eye, Truck, RefreshCw, Loader2, Radar, Square, Trash2, Calendar, X } from "lucide-react";
+import { Search, Filter, Eye, Truck, RefreshCw, Loader2, Radar, Square, Trash2, Calendar, X, Mail, Send } from "lucide-react";
 
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
 import { useEntity } from "@/lib/entityContext";
 import VisitorEmptyState from "@/components/VisitorEmptyState";
 import CarrierExportPanel from "@/components/CarrierExportPanel";
+import ColdEmailModal from "@/components/coldemail/ColdEmailModal";
 
 // Classifies a carrier's operation type from the stored carrier_segment /
 // operating_status fields. FMCSA uses "A" = Interstate, "B" = Intrastate,
@@ -25,6 +26,15 @@ function getOperationType(carrier) {
   if (text.includes("INTERSTATE") || seg === "A" || seg.startsWith("A ")) return "Interstate";
   return "Unknown";
 }
+
+// Detects whether a staff comment explicitly requests an email send.
+// Requires an explicit "send email" instruction — not just any note
+// containing the word "email".
+const isEmailRequested = (comment) => {
+  if (!comment) return false;
+  const c = comment.toLowerCase().trim();
+  return /^send\s+email/.test(c) || /^email\s+-/.test(c) || /^please\s+send\s+.*\bemail\b/.test(c) || /send\s+.*\bemail\b/.test(c);
+};
 
 const STATUS_COLORS = {
   "Imported": "bg-slate-100 text-slate-700",
@@ -77,6 +87,7 @@ export default function CarrierDatabase() {
   const [currentUser, setCurrentUser] = useState(null);
   const [commentInputs, setCommentInputs] = useState({});
   const [savingComment, setSavingComment] = useState(null);
+  const [coldEmailCarrier, setColdEmailCarrier] = useState(null);
   const PAGE_SIZE = 50;
 
   useEffect(() => {
@@ -593,6 +604,18 @@ export default function CarrierDatabase() {
                             <RefreshCw className={`w-4 h-4 ${researching ? "animate-spin" : ""}`} />
                           </button>
                         )}
+                        <button
+                          onClick={() => setColdEmailCarrier(carrier)}
+                          className={`p-1.5 rounded ${isEmailRequested(carrier.staff_comment) ? "text-blue-600 bg-blue-50 hover:bg-blue-100" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"}`}
+                          title={isEmailRequested(carrier.staff_comment) ? "Email requested — review and send cold email" : "Cold Email"}
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                        {isEmailRequested(carrier.staff_comment) && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 whitespace-nowrap" title="Email requested in comment">
+                            <Mail className="w-2.5 h-2.5 inline" /> REQ
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -602,6 +625,14 @@ export default function CarrierDatabase() {
         )}
       </div>
       </>
+      )}
+
+      {coldEmailCarrier && (
+        <ColdEmailModal
+          carrier={coldEmailCarrier}
+          onClose={() => setColdEmailCarrier(null)}
+          onSent={() => loadCarriers(true)}
+        />
       )}
     </div>
   );

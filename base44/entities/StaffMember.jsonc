@@ -59,6 +59,15 @@
       "type": "string",
       "description": "4-digit code the staff member must enter on every login \u2014 issued by admin only"
     },
+    "sales_sudo": {
+      "type": "string",
+      "description": "Sales Sudo \u2014 short sign-off name used in cold email signatures (e.g. JOHN). Must be unique among active staff. Admin-managed only."
+    },
+    "sales_sudo_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this staff member's SUDO is active for cold email signatures"
+    },
     "notes": {
       "type": "string"
     },

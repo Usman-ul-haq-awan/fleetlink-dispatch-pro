@@ -95,6 +95,11 @@ export default function StaffManagement() {
     await load();
   };
 
+  const handleUpdateSudo = async (staffMemberId, sudo) => {
+    await base44.entities.StaffMember.update(staffMemberId, { sales_sudo: sudo });
+    await load();
+  };
+
   const handleUpdateId = async (staffMemberId, file) => {
     const uploadRes = await base44.integrations.Core.UploadFile({ file });
     await base44.entities.StaffMember.update(staffMemberId, {
@@ -134,6 +139,7 @@ export default function StaffManagement() {
           onApprove={handleApprove}
           onRegenerateCode={handleRegenerateCode}
           onUpdatePhone={handleUpdatePhone}
+          onUpdateSudo={handleUpdateSudo}
           onUpdateId={handleUpdateId}
           currentUserId={currentUser?.id}
         />

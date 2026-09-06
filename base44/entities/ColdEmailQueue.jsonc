@@ -1,0 +1,142 @@
+{
+  "name": "ColdEmailQueue",
+  "type": "object",
+  "properties": {
+    "carrier_id": {
+      "type": "string",
+      "description": "Linked Carrier record"
+    },
+    "carrier_name": {
+      "type": "string",
+      "description": "Snapshot of carrier legal name at request time"
+    },
+    "to_email": {
+      "type": "string",
+      "description": "Recipient email address"
+    },
+    "staff_id": {
+      "type": "string",
+      "description": "User ID of the staff member who requested the cold email"
+    },
+    "staff_name": {
+      "type": "string",
+      "description": "Staff member's full name at request time"
+    },
+    "staff_sudo": {
+      "type": "string",
+      "description": "Staff member's Sales SUDO used in the email signature"
+    },
+    "scenario": {
+      "type": "string",
+      "enum": [
+        "General Dispatch Introduction",
+        "High-Paying Load Opportunity",
+        "Complimentary Trial",
+        "Backup Dispatcher Offer",
+        "Follow-Up",
+        "Carrier-Specific Opportunity",
+        "Re-Engagement",
+        "Custom Staff Instruction"
+      ],
+      "default": "General Dispatch Introduction"
+    },
+    "original_comment": {
+      "type": "string",
+      "description": "The staff member's original instruction \u2014 never overwritten"
+    },
+    "ai_subject": {
+      "type": "string",
+      "description": "AI-generated subject line"
+    },
+    "ai_body": {
+      "type": "string",
+      "description": "AI-generated email body"
+    },
+    "final_subject": {
+      "type": "string",
+      "description": "Staff-edited final subject line"
+    },
+    "final_body": {
+      "type": "string",
+      "description": "Staff-edited final email body"
+    },
+    "priority": {
+      "type": "number",
+      "default": 5,
+      "description": "Queue priority (1=highest, 10=lowest)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Draft",
+        "Queued",
+        "Processing",
+        "Sent",
+        "Failed",
+        "Waiting",
+        "Cancelled",
+        "Duplicate",
+        "Suppressed"
+      ],
+      "default": "Draft"
+    },
+    "scheduled_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the email is scheduled to send"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the email was successfully sent"
+    },
+    "resend_message_id": {
+      "type": "string",
+      "description": "Message ID returned by the email provider (Resend)"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Error details if the send failed"
+    },
+    "duplicate_warning": {
+      "type": "string",
+      "description": "Warning shown if recent outreach already exists for this carrier"
+    }
+  },
+  "required": [
+    "carrier_id",
+    "staff_id"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {},
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

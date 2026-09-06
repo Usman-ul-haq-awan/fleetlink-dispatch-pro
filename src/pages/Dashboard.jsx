@@ -6,6 +6,7 @@ import ResearchCriteriaChart from "@/components/ResearchCriteriaChart";
 import FollowUpLeadsTable from "@/components/FollowUpLeadsTable";
 import AllocationSection from "@/components/AllocationSection";
 import ToolsPanel from "@/components/tools/ToolsPanel";
+import ColdEmailStatsPanel from "@/components/coldemail/ColdEmailStatsPanel";
 import { listAllCarriers, listCarriersForUser, listAllEmailLogs } from "@/lib/paginatedList";
 import { RATING_COLORS, RATING_DOT, scoreBroker } from "@/lib/brokerScoring";
 import { useEntity } from "@/lib/entityContext";
@@ -317,6 +318,8 @@ export default function Dashboard() {
       </div>
 
       <ResearchCriteriaChart />
+
+      <ColdEmailStatsPanel />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quick Actions */}

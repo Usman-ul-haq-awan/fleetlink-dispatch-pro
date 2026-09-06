@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 
 export default function StaffList({
-  users, staffMembers, onRoleChange, onEntityTypeChange, onDelete, onApprove, onRegenerateCode, onUpdatePhone, onUpdateId, currentUserId,
+  users, staffMembers, onRoleChange, onEntityTypeChange, onDelete, onApprove, onRegenerateCode, onUpdatePhone, onUpdateSudo, onUpdateId, currentUserId,
 }) {
   const [changingRole, setChangingRole] = useState(null);
   const [resending, setResending] = useState(null);
@@ -17,6 +17,9 @@ export default function StaffList({
   const [editingPhone, setEditingPhone] = useState(null);
   const [phoneInput, setPhoneInput] = useState("");
   const [savingPhone, setSavingPhone] = useState(null);
+  const [editingSudo, setEditingSudo] = useState(null);
+  const [sudoInput, setSudoInput] = useState("");
+  const [savingSudo, setSavingSudo] = useState(null);
   const [uploadingId, setUploadingId] = useState(null);
   const fileInputRefs = useRef({});
   const [allocCount, setAllocCount] = useState({});
@@ -212,6 +215,37 @@ export default function StaffList({
     }
   };
 
+  const startEditSudo = (key, currentSudo) => {
+    setEditingSudo(key);
+    setSudoInput(currentSudo || "");
+  };
+
+  const saveSudo = async (staffMemberId, key) => {
+    const trimmed = sudoInput.trim().toUpperCase();
+    if (!trimmed) {
+      setMsg(key, "error", "SUDO cannot be empty.");
+      return;
+    }
+    // Uniqueness check — no two active staff can share the same SUDO
+    const duplicate = staffMembers.some(
+      (s) => s.id !== staffMemberId && (s.sales_sudo || "").toUpperCase() === trimmed
+    );
+    if (duplicate) {
+      setMsg(key, "error", "This SUDO is already used by another staff member.");
+      return;
+    }
+    setSavingSudo(key);
+    try {
+      await onUpdateSudo(staffMemberId, trimmed);
+      setEditingSudo(null);
+      setMsg(key, "success", "Sales Sudo updated.");
+    } catch (err) {
+      setMsg(key, "error", err.message || "Failed to update SUDO");
+    } finally {
+      setSavingSudo(null);
+    }
+  };
+
   const handleIdUpload = async (staffMemberId, file, key) => {
     if (!file) return;
     setUploadingId(key);
@@ -249,6 +283,7 @@ export default function StaffList({
       status: sm?.status || (u.full_name ? "Active" : "Invited"),
       identity_document_url: sm?.identity_document_url || "",
       identity_document_name: sm?.identity_document_name || "",
+      sales_sudo: sm?.sales_sudo || "",
       staffMemberId: sm?.id,
       hasAccount: true,
       approved: sm?.approved || false,
@@ -270,6 +305,7 @@ export default function StaffList({
         status: sm.status || "Invited",
         identity_document_url: sm.identity_document_url || "",
         identity_document_name: sm.identity_document_name || "",
+        sales_sudo: sm.sales_sudo || "",
         staffMemberId: sm.id,
         hasAccount: false,
         approved: sm.approved || false,
@@ -321,6 +357,7 @@ export default function StaffList({
             <tr>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Name & Login Code</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Email</th>
+              <th className="text-left px-4 py-2 font-medium text-slate-600">Sales Sudo</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Phone</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Approval</th>
               <th className="text-left px-4 py-2 font-medium text-slate-600">Role</th>
@@ -334,7 +371,7 @@ export default function StaffList({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {merged.length === 0 ? (
-              <tr><td colSpan={11} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
+              <tr><td colSpan={12} className="px-4 py-4 text-center text-slate-400">No staff members yet. Add your first staff member above.</td></tr>
             ) : merged.map((m) => (
               <tr key={m.key} className="hover:bg-slate-50">
                 <td className="px-4 py-2 text-slate-900 font-medium whitespace-nowrap">
@@ -359,6 +396,36 @@ export default function StaffList({
                   </div>
                 </td>
                 <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{m.email}</td>
+                <td className="px-4 py-2 text-xs whitespace-nowrap">
+                  {editingSudo === m.key ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={sudoInput}
+                        onChange={(e) => setSudoInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveSudo(m.staffMemberId, m.key); if (e.key === "Escape") setEditingSudo(null); }}
+                        autoFocus
+                        placeholder="e.g. JOHN"
+                        className="w-24 px-2 py-1 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 uppercase font-mono font-bold"
+                      />
+                      <button onClick={() => saveSudo(m.staffMemberId, m.key)} disabled={savingSudo === m.key}
+                        className="text-green-600 hover:text-green-800 disabled:opacity-50">
+                        {savingSudo === m.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <button onClick={() => setEditingSudo(null)} className="text-red-400 hover:text-red-600">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => m.staffMemberId && startEditSudo(m.key, m.sales_sudo)}
+                      className={`flex items-center gap-1 font-mono font-bold ${m.sales_sudo ? "text-purple-700" : "text-slate-300"} hover:text-purple-600`}
+                      title={m.staffMemberId ? "Click to edit Sales Sudo (used in cold email signatures)" : ""}
+                    >
+                      {m.sales_sudo || "—"}
+                    </button>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-slate-600 text-xs whitespace-nowrap">
                   {editingPhone === m.key ? (
                     <div className="flex items-center gap-1">
