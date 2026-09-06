@@ -40,14 +40,20 @@ export default function AllocationSection() {
   const load = async () => {
     setLoading(true);
     try {
-      const [carriers, users, emailLogs, callLogs] = await Promise.all([
+      const [carriers, users, staffMembers, emailLogs, callLogs] = await Promise.all([
         listAllCarriers("-assigned_date"),
         base44.entities.User.list("-created_date", 500).catch(() => []),
+        base44.entities.StaffMember.list("-created_date", 500).catch(() => []),
         base44.entities.EmailLog.filter({ status: "Sent" }, "-sent_at", 1000).catch(() => []),
         base44.entities.CallLog.filter({ status: "Completed" }, "-call_date", 1000).catch(() => []),
       ]);
       const byId = {};
       users.forEach(u => { byId[u.id] = u; });
+      // Map user email -> sales_sudo so we can show the agent's sign-off name
+      const sudoByEmail = {};
+      staffMembers.forEach(s => {
+        if (s.sales_sudo) sudoByEmail[(s.email || "").toLowerCase()] = s.sales_sudo;
+      });
 
       // Tally approach activity (sent emails, completed calls) per carrier
       const emailCounts = {};
@@ -76,6 +82,7 @@ export default function AllocationSection() {
           .map(d => new Date(d))
           .sort((a, b) => a - b);
         const user = byId[g.agent_id];
+        const sudo = user?.email ? sudoByEmail[user.email.toLowerCase()] : "";
 
         // Performance: tally staff_lead_status values across this agent's carriers
         const statusCounts = {};
@@ -96,6 +103,7 @@ export default function AllocationSection() {
           agent_id: g.agent_id,
           agent_name: user?.full_name || user?.email || "Unknown Agent",
           agent_email: user?.email || "",
+          agent_sudo: sudo || "",
           carrier_count: g.carriers.length,
           first_allocated: dates.length ? dates[0].toISOString() : null,
           last_allocated: dates.length ? dates[dates.length - 1].toISOString() : null,
@@ -228,6 +236,11 @@ function AgentRow({ agent, expanded, onToggle, fmtDate }) {
               >
                 {agent.agent_name}
               </Link>
+              {agent.agent_sudo && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-700" title="Sales SUDO — sign-off name used in cold email signatures">
+                  {agent.agent_sudo}
+                </span>
+              )}
               {agent.agent_email && <p className="text-xs text-slate-400">{agent.agent_email}</p>}
             </div>
           </div>
