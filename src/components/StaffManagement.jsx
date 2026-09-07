@@ -35,6 +35,7 @@ export default function StaffManagement() {
           full_name: user.full_name || "",
           email: (user.email || "").toLowerCase(),
           role: user.role || "user",
+          entity_type: user.role === "admin" ? "admin" : "staff",
           status: "Active",
           approved: user.role === "admin",
           user_id: user.id,
