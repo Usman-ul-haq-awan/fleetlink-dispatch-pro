@@ -35,15 +35,15 @@ export default function Dashboard() {
   const { isVisitor } = useEntity();
 
   useEffect(() => {
-    base44.auth.me().then(setCurrentUser).catch(() => {});
-    // Build a user_id -> { name, sudo } map so the Follow-up / Leads tables
-    // can show the assigned sales agent's name and Sales SUDO badge.
     (async () => {
       try {
-        const [users, staff] = await Promise.all([
+        const [me, users, staff] = await Promise.all([
+          base44.auth.me().catch(() => null),
           base44.entities.User.list("-created_date", 500).catch(() => []),
           base44.entities.StaffMember.list("-created_date", 500).catch(() => []),
         ]);
+        if (me) setCurrentUser(me);
+
         const sudoByEmail = {};
         staff.forEach(s => { if (s.sales_sudo) sudoByEmail[(s.email || "").toLowerCase()] = s.sales_sudo; });
         const map = {};
@@ -53,6 +53,15 @@ export default function Dashboard() {
             sudo: sudoByEmail[(u.email || "").toLowerCase()] || "",
           };
         });
+        // User.list() built-in security returns "other users" only,
+        // excluding the current admin — merge them in manually so their
+        // own carriers show their agent name in the Follow-up / Leads tables.
+        if (me && !map[me.id]) {
+          map[me.id] = {
+            name: me.full_name || me.email || "Unknown",
+            sudo: sudoByEmail[(me.email || "").toLowerCase()] || "",
+          };
+        }
         setAgentMap(map);
       } catch (err) {
         console.error("Agent map load error:", err);
