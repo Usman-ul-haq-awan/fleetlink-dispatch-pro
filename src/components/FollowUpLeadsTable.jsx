@@ -1,12 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Clock, Eye, Mail, CalendarClock } from "lucide-react";
-import { extractCallbackDate, formatCallbackDate, isOverdue } from "@/lib/callbackDate";
-
-function getStatuses(c) {
-  const s = c.staff_lead_status;
-  return Array.isArray(s) ? s : s ? [s] : [];
-}
+import { Clock, Eye, Mail } from "lucide-react";
 
 export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clock, emptyText = 'No follow-up leads. Mark carriers as "Follow-up" from their detail page to see them here.', emailSentCarrierIds, agentMap, from }) {
   if (loading) {
@@ -41,7 +35,6 @@ export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clo
             <th className="text-left px-4 py-3 font-medium text-slate-600">Agent</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">Phone</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">Email</th>
-            <th className="text-left px-4 py-3 font-medium text-slate-600">Callback Date</th>
             <th className="text-left px-4 py-3 font-medium text-slate-600">Staff Comment</th>
             <th className="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
           </tr>
@@ -83,30 +76,6 @@ export default function FollowUpLeadsTable({ carriers, loading, icon: Icon = Clo
                     {carrier.email}
                   </span>
                 ) : "—"}
-              </td>
-              <td className="px-4 py-3 text-xs">
-                {(() => {
-                  const cbDate = extractCallbackDate(carrier.staff_comment);
-                  if (!cbDate) return <span className="text-slate-400">—</span>;
-                  const approached = getStatuses(carrier).includes("Approached");
-                  const overdue = isOverdue(cbDate) && !approached;
-                  return (
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold border ${
-                        approached
-                          ? "bg-green-100 text-green-700 border-green-300"
-                          : overdue
-                          ? "bg-red-600 text-white border-red-700"
-                          : "bg-red-100 text-red-700 border-red-300"
-                      }`}
-                      title={approached ? "Approached — callback complete" : overdue ? "Overdue — call back now" : "Callback date pending"}
-                    >
-                      <CalendarClock className="w-3 h-3" />
-                      {formatCallbackDate(cbDate)}
-                      {overdue && <span className="ml-0.5">• Overdue</span>}
-                    </span>
-                  );
-                })()}
               </td>
               <td className="px-4 py-3 text-slate-600 text-xs max-w-xs truncate">{carrier.staff_comment || "—"}</td>
               <td className="px-4 py-3 text-center">
