@@ -39,9 +39,13 @@ export async function startResearch(refreshQueue, initialQueue = [], selectedSte
 
   try {
     let queue = Array.isArray(initialQueue) ? initialQueue.filter((c) => c.usdot_number || c.mc_number) : [];
+    const handledIds = new Set();
 
     while (!stopRequested && queue.length > 0) {
-      patchProgress({ total: queue.length, current: \`Researching \${queue.length} carriers currently visible...\` });
+      queue = queue.filter((c) => !handledIds.has(c.id));
+      if (queue.length === 0) break;
+
+      patchProgress({ total: queue.length, current: \`Researching \${queue.length} visible carriers...\` });
 
       const BATCH = 3;
       for (let i = 0; i < queue.length; i += BATCH) {
@@ -58,26 +62,35 @@ export async function startResearch(refreshQueue, initialQueue = [], selectedSte
                 mc: c.mc_number,
                 steps: selectedSteps,
               });
-              return res.data?.success === true;
+              const data = res.data || {};
+              return { id: c.id, handled: data.success === true || data.not_authorized === true };
             } catch {
-              return false;
+              return { id: c.id, handled: false };
             }
           })
         );
 
+        results.filter((r) => r.handled).forEach((r) => handledIds.add(r.id));
+
         patchProgress({
-          done: state.progress.done + results.filter(Boolean).length,
-          failed: state.progress.failed + results.filter((r) => !r).length,
+          done: state.progress.done + results.filter((r) => r.handled).length,
+          failed: state.progress.failed + results.filter((r) => !r.handled).length,
         });
         await new Promise((r) => setTimeout(r, 1000));
       }
 
       if (stopRequested) break;
 
-      queue = typeof refreshQueue === "function"
-        ? ((await refreshQueue()) || []).filter((c) => c.usdot_number || c.mc_number)
-        : [];
-      patchProgress({ total: queue.length, current: queue.length ? \`Refreshing table — \${queue.length} carriers remain\` : "Table clear — research complete" });
+      const refreshed = typeof refreshQueue === "function" ? ((await refreshQueue()) || []) : [];
+      queue = refreshed
+        .filter((c) => (c.usdot_number || c.mc_number) && !handledIds.has(c.id));
+
+      patchProgress({
+        total: queue.length,
+        current: queue.length
+          ? \`Refreshing table — \${queue.length} carriers remain\`
+          : "Table clear — research complete",
+      });
     }
 
     patchProgress({ current: stopRequested ? "Stopped" : "Table clear — research complete" });
