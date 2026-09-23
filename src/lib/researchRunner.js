@@ -4,7 +4,6 @@
 // subscribe to receive live progress snapshots.
 
 import { base44 } from "@/api/base44Client";
-import { listAllCarriers } from "@/lib/paginatedList";
 
 let state = {
   running: false,
@@ -33,44 +32,55 @@ export function stopResearch() {
 
 // Processes every carrier in the database through the browser worker in
 // controlled-concurrency batches. Skips carriers with no USDOT/MC.
-export async function startResearch() {
+export async function startResearch(refreshQueue, initialQueue = [], selectedSteps = []) {
   if (state.running) return;
   stopRequested = false;
-  patch({ running: true, progress: { total: 0, done: 0, failed: 0, current: "Loading carriers..." } });
+  patch({ running: true, progress: { total: 0, done: 0, failed: 0, current: "Preparing visible carrier table..." } });
 
   try {
-    const all = await listAllCarriers("-updated_date");
-    const queue = all.filter((c) => c.usdot_number || c.mc_number);
-    patchProgress({ total: queue.length, current: `Updating ${queue.length} carriers...` });
+    let queue = Array.isArray(initialQueue) ? initialQueue.filter((c) => c.usdot_number || c.mc_number) : [];
 
-    const BATCH = 3;
-    for (let i = 0; i < queue.length; i += BATCH) {
+    while (!stopRequested && queue.length > 0) {
+      patchProgress({ total: queue.length, current: \`Researching \${queue.length} carriers currently visible...\` });
+
+      const BATCH = 3;
+      for (let i = 0; i < queue.length; i += BATCH) {
+        if (stopRequested) break;
+        const batch = queue.slice(i, i + BATCH);
+        patchProgress({ current: \`Researching \${i + 1}-\${Math.min(i + BATCH, queue.length)} of \${queue.length}\` });
+
+        const results = await Promise.all(
+          batch.map(async (c) => {
+            try {
+              const res = await base44.functions.invoke("researchCarrierBrowser", {
+                carrier_id: c.id,
+                usdot: c.usdot_number,
+                mc: c.mc_number,
+                steps: selectedSteps,
+              });
+              return res.data?.success === true;
+            } catch {
+              return false;
+            }
+          })
+        );
+
+        patchProgress({
+          done: state.progress.done + results.filter(Boolean).length,
+          failed: state.progress.failed + results.filter((r) => !r).length,
+        });
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+
       if (stopRequested) break;
-      const batch = queue.slice(i, i + BATCH);
-      patchProgress({ current: `Researching ${i + 1}-${Math.min(i + BATCH, queue.length)} of ${queue.length}` });
 
-      const results = await Promise.all(
-        batch.map(async (c) => {
-          try {
-            const res = await base44.functions.invoke("researchCarrierBrowser", {
-              carrier_id: c.id,
-              usdot: c.usdot_number,
-              mc: c.mc_number,
-            });
-            return res.data?.success === true;
-          } catch {
-            return false;
-          }
-        })
-      );
-
-      patchProgress({
-        done: state.progress.done + results.filter(Boolean).length,
-        failed: state.progress.failed + results.filter((r) => !r).length,
-      });
-      await new Promise((r) => setTimeout(r, 1000));
+      queue = typeof refreshQueue === "function"
+        ? ((await refreshQueue()) || []).filter((c) => c.usdot_number || c.mc_number)
+        : [];
+      patchProgress({ total: queue.length, current: queue.length ? \`Refreshing table — \${queue.length} carriers remain\` : "Table clear — research complete" });
     }
-    patchProgress({ current: stopRequested ? "Stopped" : "Research center update complete" });
+
+    patchProgress({ current: stopRequested ? "Stopped" : "Table clear — research complete" });
   } finally {
     patch({ running: false });
     stopRequested = false;
