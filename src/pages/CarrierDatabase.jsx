@@ -244,6 +244,7 @@ export default function CarrierDatabase() {
 
       setCarriers(filtered);
       setHasMore(filtered.length === PAGE_SIZE);
+      return filtered;
     } catch (err) {
       console.error("Load error:", err);
     } finally {
