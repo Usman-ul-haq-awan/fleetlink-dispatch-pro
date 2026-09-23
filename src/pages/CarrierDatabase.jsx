@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Search, Filter, Eye, Truck, RefreshCw, Loader2, Radar, Square, Trash2, Calendar, X, Mail, Send } from "lucide-react";
 
 import { subscribe as subscribeResearch, startResearch as startRunnerResearch, stopResearch as stopRunnerResearch } from "@/lib/researchRunner";
+import { ALL_STEP_KEYS } from "@/components/ResearchStepsSelector";
 import { useEntity } from "@/lib/entityContext";
 import VisitorEmptyState from "@/components/VisitorEmptyState";
 import CarrierExportPanel from "@/components/CarrierExportPanel";
@@ -252,7 +253,7 @@ export default function CarrierDatabase() {
 
   useEffect(() => { if (currentUser && !isVisitor) loadCarriers(true); }, [loadCarriers, currentUser, isVisitor]);
 
-  const handleResearch = async (carrierId, usdot) => {
+  const startVisibleTableResearch = () => startRunnerResearch(() => loadCarriers(true), carriers, ALL_STEP_KEYS);\n\n  const handleResearch = async (carrierId, usdot) => {
     setResearching(true);
     try {
       await base44.functions.invoke("researchCarrier", { carrier_id: carrierId, usdot });
@@ -277,7 +278,7 @@ export default function CarrierDatabase() {
         </div>
         <div className="flex items-center gap-2">
           {!researchCenter.running ? (
-            <button onClick={startRunnerResearch} disabled={carriers.length === 0}
+            <button onClick={startVisibleTableResearch} disabled={carriers.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50">
               <Radar className="w-4 h-4" />
               Research Center
