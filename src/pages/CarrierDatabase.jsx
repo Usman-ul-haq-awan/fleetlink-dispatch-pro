@@ -483,6 +483,16 @@ export default function CarrierDatabase() {
                   {!isAdmin && <th className="text-left px-4 py-3 font-medium text-slate-600">Lead Mark</th>}
                   {!isAdmin && <th className="text-left px-4 py-3 font-medium text-slate-600">Approach Result / Comment</th>}
                   <th className="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
+                  <th className="text-center px-2 py-3 w-12">
+                    <button
+                      onClick={startVisibleTableResearch}
+                      disabled={researchCenter.running || carriers.length === 0}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Research visible carriers using all 9 criteria"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -619,6 +629,7 @@ export default function CarrierDatabase() {
                         )}
                       </div>
                     </td>
+                    <td className="px-2 py-3"></td>
                   </tr>
                 ))}
               </tbody>
