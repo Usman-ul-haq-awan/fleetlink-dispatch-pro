@@ -51,6 +51,33 @@ function buildWhere(query) {
   return { clause: clauses.length ? clauses.join(" AND ") : "", params };
 }
 
+const GENERIC_COLS = ["id", "created_date", "updated_date", "owner", "entity_name", "data"];
+
+function genericSort(sort) {
+  if (!sort) return "created_date DESC";
+  const desc = sort.startsWith("-");
+  const field = desc ? sort.slice(1) : sort;
+  if (GENERIC_COLS.includes(field)) return `${field} ${desc ? "DESC" : "ASC"}`;
+  return `json_extract(data, '$.${field}') ${desc ? "DESC" : "ASC"}`;
+}
+
+function buildGenericWhere(query) {
+  if (!query || typeof query !== "object") return { clause: "", params: [] };
+  const clauses = [];
+  const params = [];
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "id" && value && typeof value === "object" && value.$in) {
+      const ph = value.$in.map(() => "?").join(",");
+      clauses.push(`id IN (${ph})`);
+      params.push(...value.$in);
+    } else if (value !== undefined && value !== null && typeof value !== "object") {
+      clauses.push(`json_extract(data, '$.${key}') = ?`);
+      params.push(String(value));
+    }
+  }
+  return { clause: clauses.length ? clauses.join(" AND ") : "", params };
+}
+
 // --- Health check ---
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 
@@ -137,30 +164,6 @@ app.get(`/api/apps/:appId/entities/:entityName`, (req, res) => {
     return res.json(rows.map(rowToUser));
   }
   // Generic entities — sort/filter by JSON fields inside the data column
-  const GENERIC_COLS = ["id", "created_date", "updated_date", "owner", "entity_name", "data"];
-  function genericSort(sort) {
-    if (!sort) return "created_date DESC";
-    const desc = sort.startsWith("-");
-    const field = desc ? sort.slice(1) : sort;
-    if (GENERIC_COLS.includes(field)) return `${field} ${desc ? "DESC" : "ASC"}`;
-    return `json_extract(data, '$.${field}') ${desc ? "DESC" : "ASC"}`;
-  }
-  function buildGenericWhere(query) {
-    if (!query || typeof query !== "object") return { clause: "", params: [] };
-    const clauses = [];
-    const params = [];
-    for (const [key, value] of Object.entries(query)) {
-      if (key === "id" && value && typeof value === "object" && value.$in) {
-        const ph = value.$in.map(() => "?").join(",");
-        clauses.push(`id IN (${ph})`);
-        params.push(...value.$in);
-      } else if (value !== undefined && value !== null && typeof value !== "object") {
-        clauses.push(`json_extract(data, '$.${key}') = ?`);
-        params.push(String(value));
-      }
-    }
-    return { clause: clauses.length ? clauses.join(" AND ") : "", params };
-  }
   const { clause, params } = buildGenericWhere(q ? JSON.parse(q) : null);
   const gOrder = genericSort(sort);
   let sql = `SELECT * FROM generic_entities WHERE entity_name = ?`;
@@ -276,11 +279,15 @@ app.delete(`/api/apps/:appId/entities/:entityName/:id`, (req, res) => {
 app.delete(`/api/apps/:appId/entities/:entityName`, (req, res) => {
   const { entityName } = req.params;
   const query = req.body;
-  const { clause, params } = buildWhere(query);
   if (entityName === "Carrier") {
+    const { clause, params } = buildWhere(query);
     if (clause) db.prepare(`DELETE FROM carriers WHERE ${clause}`).run(...params);
     else db.prepare("DELETE FROM carriers").run();
+  } else if (entityName === "User") {
+    const { clause, params } = buildWhere(query);
+    if (clause) db.prepare(`DELETE FROM users WHERE ${clause}`).run(...params);
   } else {
+    const { clause, params } = buildGenericWhere(query);
     if (clause) db.prepare(`DELETE FROM generic_entities WHERE entity_name = ? AND ${clause}`).run(entityName, ...params);
   }
   res.json({ success: true });
