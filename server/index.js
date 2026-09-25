@@ -2,6 +2,7 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { db, genId, nowISO, CARRIER_COLUMNS, rowToCarrier, rowToUser } from "./db.js";
+import { handleEmailFunction, isSmtpConfigured } from "./email.js";
 
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || "local-dev-secret";
@@ -332,7 +333,7 @@ app.patch(`/api/apps/:appId/entities/:entityName/update-many`, (req, res) => {
 });
 
 // --- Functions (invoke) ---
-app.post(`/api/apps/:appId/functions/:functionName`, (req, res) => {
+app.post(`/api/apps/:appId/functions/:functionName`, async (req, res) => {
   const { functionName } = req.params;
   const body = req.body;
 
@@ -347,6 +348,18 @@ app.post(`/api/apps/:appId/functions/:functionName`, (req, res) => {
       has_phone: true,
       has_id: true,
     });
+  }
+
+  // Email functions — sendTestEmail, sendCampaignEmail, sendColdEmail,
+  // sendStaffSalesEmail, generateEmailContent, generateColdEmail,
+  // previewEmailFormat, runEmailBatch, getColdEmailStats
+  try {
+    const emailResult = await handleEmailFunction(functionName, body, req);
+    if (emailResult) {
+      return res.json({ success: true, data: emailResult.data });
+    }
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 
   // All other functions — return a generic success stub
