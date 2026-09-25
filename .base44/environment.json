@@ -2,18 +2,5 @@
   "previewPort": 3000,
   "healthPath": "/",
   "startCommand": "docker compose -f docker-compose.base44.yml up -d",
-  "secrets": [
-    {
-      "name": "VITE_BASE44_APP_ID",
-      "description": "Base44 app ID from the Builder dashboard (FleetLink Dispatch Pro). Identifies the app for the frontend SDK.",
-      "requiredAtBoot": true,
-      "generatedForDevelopment": true
-    },
-    {
-      "name": "VITE_BASE44_APP_BASE_URL",
-      "description": "Hosted Base44 app base URL (e.g. https://your-app.base44.app). The Vite plugin proxies /api here.",
-      "requiredAtBoot": true,
-      "generatedForDevelopment": true
-    }
-  ]
+  "secrets": []
 }
