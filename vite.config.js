@@ -15,13 +15,5 @@ export default defineConfig({
       visualEditAgent: true
     }),
     react(),
-  ],
-  server: {
-    proxy: {
-      '/api': {
-        target: process.env.API_URL || 'http://localhost:3001',
-        changeOrigin: true,
-      }
-    }
-  }
+  ]
 });
