@@ -45,13 +45,13 @@ export async function startResearch(refreshQueue, initialQueue = [], selectedSte
       queue = queue.filter((c) => !handledIds.has(c.id));
       if (queue.length === 0) break;
 
-      patchProgress({ total: queue.length, current: \`Researching \${queue.length} visible carriers...\` });
+      patchProgress({ total: queue.length, current: `Researching ${queue.length} visible carriers...` });
 
       const BATCH = 3;
       for (let i = 0; i < queue.length; i += BATCH) {
         if (stopRequested) break;
         const batch = queue.slice(i, i + BATCH);
-        patchProgress({ current: \`Researching \${i + 1}-\${Math.min(i + BATCH, queue.length)} of \${queue.length}\` });
+        patchProgress({ current: `Researching ${i + 1}-${Math.min(i + BATCH, queue.length)} of ${queue.length}` });
 
         const results = await Promise.all(
           batch.map(async (c) => {
@@ -88,7 +88,7 @@ export async function startResearch(refreshQueue, initialQueue = [], selectedSte
       patchProgress({
         total: queue.length,
         current: queue.length
-          ? \`Refreshing table — \${queue.length} carriers remain\`
+          ? `Refreshing table — ${queue.length} carriers remain`
           : "Table clear — research complete",
       });
     }

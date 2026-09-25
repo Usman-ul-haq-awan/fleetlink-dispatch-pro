@@ -254,7 +254,9 @@ export default function CarrierDatabase() {
 
   useEffect(() => { if (currentUser && !isVisitor) loadCarriers(true); }, [loadCarriers, currentUser, isVisitor]);
 
-  const startVisibleTableResearch = () => startRunnerResearch(() => loadCarriers(true), carriers, ALL_STEP_KEYS);\n\n  const handleResearch = async (carrierId, usdot) => {
+  const startVisibleTableResearch = () => startRunnerResearch(() => loadCarriers(true), carriers, ALL_STEP_KEYS);
+
+  const handleResearch = async (carrierId, usdot) => {
     setResearching(true);
     try {
       await base44.functions.invoke("researchCarrier", { carrier_id: carrierId, usdot });
