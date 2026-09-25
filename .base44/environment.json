@@ -1,0 +1,14 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    { "name": "VITE_BASE44_APP_ID", "description": "Base44 app ID from the app dashboard", "requiredAtBoot": true },
+    { "name": "VITE_BASE44_APP_BASE_URL", "description": "Base44 app base URL (e.g. https://your-app.base44.app)", "requiredAtBoot": true },
+    { "name": "SMTP_HOST", "description": "SMTP server host for sending emails", "requiredAtBoot": false },
+    { "name": "SMTP_PORT", "description": "SMTP server port (465 for SSL)", "requiredAtBoot": false },
+    { "name": "SMTP_SECURE", "description": "Use SSL/TLS for SMTP connection (true/false)", "requiredAtBoot": false },
+    { "name": "SMTP_USER", "description": "SMTP authentication username/email", "requiredAtBoot": false },
+    { "name": "SMTP_PASSWORD", "description": "SMTP authentication password", "requiredAtBoot": false }
+  ]
+}
