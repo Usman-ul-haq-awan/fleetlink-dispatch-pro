@@ -2,11 +2,11 @@ import base44 from "@base44/vite-plugin"
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// The Base44 plugin proxies /api to VITE_BASE44_APP_BASE_URL. If the value
-// is a generated dev placeholder (not a valid http(s) URL), the proxy crashes
-// on the first request. Clear it so the plugin skips the proxy instead.
-const _rawBaseUrl = process.env.VITE_BASE44_APP_BASE_URL;
-if (_rawBaseUrl && !/^https?:\/\//.test(_rawBaseUrl)) {
+// The Base44 plugin uses VITE_BASE44_APP_BASE_URL as its /api proxy target.
+// For the local backend this should be empty (relative URLs via our own proxy).
+// If a stale generated value is present in the platform env, clear it so the
+// plugin doesn't try to proxy to an invalid URL and crash.
+if (process.env.VITE_BASE44_APP_BASE_URL && !/^https?:\/\//.test(process.env.VITE_BASE44_APP_BASE_URL)) {
   process.env.VITE_BASE44_APP_BASE_URL = '';
 }
 
@@ -23,5 +23,13 @@ export default defineConfig({
       visualEditAgent: true
     }),
     react(),
-  ]
+  ],
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.API_URL || 'http://localhost:3001',
+        changeOrigin: true,
+      }
+    }
+  }
 });

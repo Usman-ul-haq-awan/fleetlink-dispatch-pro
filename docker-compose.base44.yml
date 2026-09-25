@@ -1,4 +1,27 @@
 services:
+  api:
+    image: node:22
+    working_dir: /app/server
+    volumes:
+      - ./:/app
+      - api_node_modules:/app/server/node_modules
+      - api_data:/app/data
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - JWT_SECRET=local-dev-secret
+      - DB_PATH=/app/data/fleetlink.db
+    env_file:
+      - /run/base44/app.env
+    command: sh -c "npm install && node import.js && node index.js"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   web:
     image: node:22
     working_dir: /app
@@ -9,9 +32,13 @@ services:
       - "3000:5173"
     environment:
       - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+      - API_URL=http://api:3001
     env_file:
       - ./.env.base44-defaults
       - /run/base44/app.env
+    depends_on:
+      api:
+        condition: service_healthy
     command: sh -c "npm install && npx vite --host 0.0.0.0 --port 5173"
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5173/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
@@ -22,3 +49,5 @@ services:
 
 volumes:
   web_node_modules:
+  api_node_modules:
+  api_data:
